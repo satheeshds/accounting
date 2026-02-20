@@ -1,0 +1,1449 @@
+basePath: /api/v1
+definitions:
+  handlers.BillLink:
+    properties:
+      account_name:
+        type: string
+      amount:
+        type: integer
+      created_at:
+        type: string
+      description:
+        type: string
+      document_id:
+        type: integer
+      document_type:
+        description: bill, invoice
+        type: string
+      id:
+        type: integer
+      reference:
+        type: string
+      transaction_date:
+        type: string
+      transaction_id:
+        type: integer
+    type: object
+  handlers.InvoiceLink:
+    properties:
+      account_name:
+        type: string
+      amount:
+        type: integer
+      created_at:
+        type: string
+      description:
+        type: string
+      document_id:
+        type: integer
+      document_type:
+        description: bill, invoice
+        type: string
+      id:
+        type: integer
+      reference:
+        type: string
+      transaction_date:
+        type: string
+      transaction_id:
+        type: integer
+    type: object
+  handlers.Response:
+    properties:
+      data: {}
+      error:
+        type: string
+    type: object
+  handlers.dashboardData:
+    properties:
+      bills_payable:
+        description: sum of unpaid bill amounts (paise)
+        type: integer
+      invoices_receivable:
+        description: sum of unpaid invoice amounts (paise)
+        type: integer
+      overdue_bills:
+        type: integer
+      overdue_invoices:
+        type: integer
+      recent_transactions:
+        items:
+          additionalProperties: {}
+          type: object
+        type: array
+      total_accounts:
+        type: integer
+      total_bills:
+        type: integer
+      total_contacts:
+        type: integer
+      total_invoices:
+        type: integer
+      total_transactions:
+        type: integer
+    type: object
+  models.Account:
+    properties:
+      balance:
+        description: Computed
+        type: integer
+      created_at:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      opening_balance:
+        type: integer
+      type:
+        description: bank, cash, credit_card
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.AccountInput:
+    properties:
+      name:
+        type: string
+      opening_balance:
+        type: integer
+      type:
+        type: string
+    type: object
+  models.Bill:
+    properties:
+      allocated:
+        description: sum of linked transaction_documents amounts
+        type: integer
+      amount:
+        type: integer
+      bill_number:
+        type: string
+      contact_id:
+        type: integer
+      contact_name:
+        description: Computed fields
+        type: string
+      created_at:
+        type: string
+      due_date:
+        type: string
+      file_url:
+        type: string
+      id:
+        type: integer
+      issue_date:
+        type: string
+      notes:
+        type: string
+      status:
+        type: string
+      unallocated:
+        description: amount - allocated
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.BillInput:
+    properties:
+      amount:
+        type: integer
+      bill_number:
+        type: string
+      contact_id:
+        type: integer
+      due_date:
+        type: string
+      file_url:
+        type: string
+      issue_date:
+        type: string
+      notes:
+        type: string
+      status:
+        type: string
+    type: object
+  models.Contact:
+    properties:
+      allocated_amount:
+        description: 'Computed: Sum of payments'
+        type: integer
+      balance:
+        description: 'Computed: Total - Allocated'
+        type: integer
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      phone:
+        type: string
+      total_amount:
+        description: 'Computed: Sum of bills/invoices'
+        type: integer
+      type:
+        description: vendor, customer
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.ContactInput:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+      type:
+        type: string
+    type: object
+  models.Invoice:
+    properties:
+      allocated:
+        type: integer
+      amount:
+        type: integer
+      contact_id:
+        type: integer
+      contact_name:
+        description: Computed fields
+        type: string
+      created_at:
+        type: string
+      due_date:
+        type: string
+      file_url:
+        type: string
+      id:
+        type: integer
+      invoice_number:
+        type: string
+      issue_date:
+        type: string
+      notes:
+        type: string
+      status:
+        type: string
+      unallocated:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.InvoiceInput:
+    properties:
+      amount:
+        type: integer
+      contact_id:
+        type: integer
+      due_date:
+        type: string
+      file_url:
+        type: string
+      invoice_number:
+        type: string
+      issue_date:
+        type: string
+      notes:
+        type: string
+      status:
+        type: string
+    type: object
+  models.Transaction:
+    properties:
+      account_id:
+        type: integer
+      account_name:
+        description: Computed fields
+        type: string
+      allocated:
+        type: integer
+      amount:
+        type: integer
+      contact_id:
+        type: integer
+      contact_name:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      reference:
+        type: string
+      transaction_date:
+        type: string
+      transfer_account_id:
+        type: integer
+      transfer_account_name:
+        type: string
+      type:
+        description: income, expense, transfer
+        type: string
+      unallocated:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.TransactionDocument:
+    properties:
+      amount:
+        type: integer
+      created_at:
+        type: string
+      document_id:
+        type: integer
+      document_type:
+        description: bill, invoice
+        type: string
+      id:
+        type: integer
+      transaction_id:
+        type: integer
+    type: object
+  models.TransactionDocumentInput:
+    properties:
+      amount:
+        type: integer
+      document_id:
+        type: integer
+      document_type:
+        type: string
+    type: object
+  models.TransactionInput:
+    properties:
+      account_id:
+        type: integer
+      amount:
+        type: integer
+      contact_id:
+        type: integer
+      description:
+        type: string
+      reference:
+        type: string
+      transaction_date:
+        type: string
+      transfer_account_id:
+        type: integer
+      type:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API for managing accounts, contacts, bills, invoices, and transactions.
+  title: Accounting Software API
+  version: 1.0.0
+paths:
+  /accounts:
+    get:
+      description: Get a list of all bank accounts, cash, and credit cards with current
+        balances.
+      parameters:
+      - description: Search by name
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.Account'
+                  type: array
+              type: object
+      security:
+      - BasicAuth: []
+      summary: List accounts
+      tags:
+      - accounts
+    post:
+      consumes:
+      - application/json
+      description: Create a new bank account, cash or credit card.
+      parameters:
+      - description: Account contents
+        in: body
+        name: account
+        required: true
+        schema:
+          $ref: '#/definitions/models.AccountInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Account'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Create account
+      tags:
+      - accounts
+  /accounts/{id}:
+    delete:
+      description: Remove an account.
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Delete account
+      tags:
+      - accounts
+    get:
+      description: Get details and current balance of a specific account.
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Account'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Get account
+      tags:
+      - accounts
+    put:
+      consumes:
+      - application/json
+      description: Update details of an existing account.
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated account contents
+        in: body
+        name: account
+        required: true
+        schema:
+          $ref: '#/definitions/models.AccountInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Account'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Update account
+      tags:
+      - accounts
+  /bills:
+    get:
+      description: Get a list of all payable bills, with current status and allocation
+        info.
+      parameters:
+      - description: Filter by contact (vendor)
+        in: query
+        name: contact_id
+        type: integer
+      - description: Search by bill number, notes, or vendor name
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.Bill'
+                  type: array
+              type: object
+      security:
+      - BasicAuth: []
+      summary: List bills
+      tags:
+      - bills
+    post:
+      consumes:
+      - application/json
+      description: Create a new payable bill.
+      parameters:
+      - description: Bill contents
+        in: body
+        name: bill
+        required: true
+        schema:
+          $ref: '#/definitions/models.BillInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Bill'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Create bill
+      tags:
+      - bills
+  /bills/{id}:
+    delete:
+      description: Remove a bill.
+      parameters:
+      - description: Bill ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Delete bill
+      tags:
+      - bills
+    get:
+      description: Get details and allocation status of a specific bill.
+      parameters:
+      - description: Bill ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Bill'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Get bill
+      tags:
+      - bills
+    put:
+      consumes:
+      - application/json
+      description: Update details of an existing bill.
+      parameters:
+      - description: Bill ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated bill contents
+        in: body
+        name: bill
+        required: true
+        schema:
+          $ref: '#/definitions/models.BillInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Bill'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Update bill
+      tags:
+      - bills
+  /bills/{id}/links:
+    get:
+      description: Get all payment transactions linked to a specific bill.
+      parameters:
+      - description: Bill ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/handlers.BillLink'
+                  type: array
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Get bill links
+      tags:
+      - bills
+  /contacts:
+    get:
+      description: Get a list of all vendors and customers with financial summaries.
+      parameters:
+      - description: Filter by type (vendor/customer)
+        in: query
+        name: type
+        type: string
+      - description: Search by name, email, or phone
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.Contact'
+                  type: array
+              type: object
+      security:
+      - BasicAuth: []
+      summary: List contacts
+      tags:
+      - contacts
+    post:
+      consumes:
+      - application/json
+      description: Create a new vendor or customer.
+      parameters:
+      - description: Contact contents
+        in: body
+        name: contact
+        required: true
+        schema:
+          $ref: '#/definitions/models.ContactInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Contact'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Create contact
+      tags:
+      - contacts
+  /contacts/{id}:
+    delete:
+      description: Remove a contact.
+      parameters:
+      - description: Contact ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Delete contact
+      tags:
+      - contacts
+    get:
+      description: Get details and financial summary of a specific contact.
+      parameters:
+      - description: Contact ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Contact'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Get contact
+      tags:
+      - contacts
+    put:
+      consumes:
+      - application/json
+      description: Update details of an existing contact.
+      parameters:
+      - description: Contact ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated contact contents
+        in: body
+        name: contact
+        required: true
+        schema:
+          $ref: '#/definitions/models.ContactInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Contact'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Update contact
+      tags:
+      - contacts
+  /dashboard:
+    get:
+      description: Get totals for accounts, contacts, bills, invoices, and recent
+        transactions.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/handlers.dashboardData'
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Get dashboard
+      tags:
+      - dashboard
+  /invoices:
+    get:
+      description: Get a list of all receivable invoices, with current status and
+        allocation info.
+      parameters:
+      - description: Filter by contact (customer)
+        in: query
+        name: contact_id
+        type: integer
+      - description: Search by invoice number, notes, or customer name
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.Invoice'
+                  type: array
+              type: object
+      security:
+      - BasicAuth: []
+      summary: List invoices
+      tags:
+      - invoices
+    post:
+      consumes:
+      - application/json
+      description: Create a new receivable invoice.
+      parameters:
+      - description: Invoice contents
+        in: body
+        name: invoice
+        required: true
+        schema:
+          $ref: '#/definitions/models.InvoiceInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Invoice'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Create invoice
+      tags:
+      - invoices
+  /invoices/{id}:
+    delete:
+      description: Remove an invoice.
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Delete invoice
+      tags:
+      - invoices
+    get:
+      description: Get details and allocation status of a specific invoice.
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Invoice'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Get invoice
+      tags:
+      - invoices
+    put:
+      consumes:
+      - application/json
+      description: Update details of an existing invoice.
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated invoice contents
+        in: body
+        name: invoice
+        required: true
+        schema:
+          $ref: '#/definitions/models.InvoiceInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Invoice'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Update invoice
+      tags:
+      - invoices
+  /invoices/{id}/links:
+    get:
+      description: Get all payment transactions linked to a specific invoice.
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/handlers.InvoiceLink'
+                  type: array
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Get invoice links
+      tags:
+      - invoices
+  /transactions:
+    get:
+      description: Get a list of all bank transactions (income, expense, transfer)
+        with allocation info.
+      parameters:
+      - description: Filter by account
+        in: query
+        name: account_id
+        type: integer
+      - description: Filter by contact
+        in: query
+        name: contact_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.Transaction'
+                  type: array
+              type: object
+      security:
+      - BasicAuth: []
+      summary: List transactions
+      tags:
+      - transactions
+    post:
+      consumes:
+      - application/json
+      description: Create a new bank transaction (income, expense, or transfer).
+      parameters:
+      - description: Transaction contents
+        in: body
+        name: transaction
+        required: true
+        schema:
+          $ref: '#/definitions/models.TransactionInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Transaction'
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Create transaction
+      tags:
+      - transactions
+  /transactions/{id}:
+    delete:
+      description: Remove a transaction.
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Delete transaction
+      tags:
+      - transactions
+    get:
+      description: Get details and allocation status of a specific transaction.
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Transaction'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Get transaction
+      tags:
+      - transactions
+    put:
+      consumes:
+      - application/json
+      description: Update details of an existing transaction.
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated transaction contents
+        in: body
+        name: transaction
+        required: true
+        schema:
+          $ref: '#/definitions/models.TransactionInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Transaction'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                error:
+                  type: string
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Update transaction
+      tags:
+      - transactions
+  /transactions/{id}/links:
+    get:
+      description: Get all bills and invoices linked (paid) by this transaction.
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.TransactionDocument'
+                  type: array
+              type: object
+      security:
+      - BasicAuth: []
+      summary: List transaction links
+      tags:
+      - transactions
+    post:
+      consumes:
+      - application/json
+      description: Allocate an amount from a transaction to a specific bill or invoice.
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Link details
+        in: body
+        name: link
+        required: true
+        schema:
+          $ref: '#/definitions/models.TransactionDocumentInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.TransactionDocument'
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Create transaction link
+      tags:
+      - transactions
+  /transactions/{id}/links/{linkId}:
+    delete:
+      description: Deallocate an amount from a transaction to a bill or invoice.
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Link ID
+        in: path
+        name: linkId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.Response'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+      security:
+      - BasicAuth: []
+      summary: Delete transaction link
+      tags:
+      - transactions
+securityDefinitions:
+  BasicAuth:
+    type: basic
+swagger: "2.0"

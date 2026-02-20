@@ -1,0 +1,825 @@
+openapi: 3.0.0
+info:
+  title: Accounting Software API
+  version: 1.0.0
+  description: API for managing accounts, contacts, bills, invoices, and transactions.
+servers:
+  - url: /api/v1
+    description: Local server
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+  schemas:
+    Response:
+      type: object
+      properties:
+        data:
+          type: object
+        error:
+          type: string
+    
+    Account:
+      type: object
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        type: {type: string, enum: [bank, cash, credit_card]}
+        opening_balance: {type: integer, description: "Balance in paise"}
+        balance: {type: integer, description: "Current balance in paise (computed)"}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    
+    AccountInput:
+      type: object
+      required: [name, type]
+      properties:
+        name: {type: string}
+        type: {type: string, enum: [bank, cash, credit_card]}
+        opening_balance: {type: integer}
+
+    Contact:
+      type: object
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        type: {type: string, enum: [vendor, customer]}
+        email: {type: string, nullable: true}
+        phone: {type: string, nullable: true}
+        total_amount: {type: integer}
+        allocated_amount: {type: integer}
+        balance: {type: integer}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    
+    ContactInput:
+      type: object
+      required: [name, type]
+      properties:
+        name: {type: string}
+        type: {type: string, enum: [vendor, customer]}
+        email: {type: string, nullable: true}
+        phone: {type: string, nullable: true}
+
+    Bill:
+      type: object
+      properties:
+        id: {type: integer}
+        contact_id: {type: integer, nullable: true}
+        bill_number: {type: string}
+        issue_date: {type: string, format: date, nullable: true}
+        due_date: {type: string, format: date, nullable: true}
+        amount: {type: integer}
+        status: {type: string, enum: [draft, received, paid, overdue, cancelled]}
+        file_url: {type: string, nullable: true}
+        notes: {type: string, nullable: true}
+        contact_name: {type: string, nullable: true}
+        allocated: {type: integer}
+        unallocated: {type: integer}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+
+    BillInput:
+      type: object
+      properties:
+        contact_id: {type: integer, nullable: true}
+        bill_number: {type: string}
+        issue_date: {type: string, format: date, nullable: true}
+        due_date: {type: string, format: date, nullable: true}
+        amount: {type: integer}
+        status: {type: string, enum: [draft, received, paid, overdue, cancelled]}
+        file_url: {type: string, nullable: true}
+        notes: {type: string, nullable: true}
+
+    Invoice:
+      type: object
+      properties:
+        id: {type: integer}
+        contact_id: {type: integer, nullable: true}
+        invoice_number: {type: string}
+        issue_date: {type: string, format: date, nullable: true}
+        due_date: {type: string, format: date, nullable: true}
+        amount: {type: integer}
+        status: {type: string, enum: [draft, sent, paid, overdue, cancelled]}
+        file_url: {type: string, nullable: true}
+        notes: {type: string, nullable: true}
+        contact_name: {type: string, nullable: true}
+        allocated: {type: integer}
+        unallocated: {type: integer}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+
+    InvoiceInput:
+      type: object
+      properties:
+        contact_id: {type: integer, nullable: true}
+        invoice_number: {type: string}
+        issue_date: {type: string, format: date, nullable: true}
+        due_date: {type: string, format: date, nullable: true}
+        amount: {type: integer}
+        status: {type: string, enum: [draft, sent, paid, overdue, cancelled]}
+        file_url: {type: string, nullable: true}
+        notes: {type: string, nullable: true}
+
+    Transaction:
+      type: object
+      properties:
+        id: {type: integer}
+        account_id: {type: integer}
+        type: {type: string, enum: [income, expense, transfer]}
+        amount: {type: integer}
+        transaction_date: {type: string, format: date, nullable: true}
+        description: {type: string, nullable: true}
+        reference: {type: string, nullable: true}
+        transfer_account_id: {type: integer, nullable: true}
+        contact_id: {type: integer, nullable: true}
+        account_name: {type: string, nullable: true}
+        transfer_account_name: {type: string, nullable: true}
+        contact_name: {type: string, nullable: true}
+        allocated: {type: integer}
+        unallocated: {type: integer}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+
+    TransactionInput:
+      type: object
+      required: [account_id, type, amount]
+      properties:
+        account_id: {type: integer}
+        type: {type: string, enum: [income, expense, transfer]}
+        amount: {type: integer}
+        transaction_date: {type: string, format: date, nullable: true}
+        description: {type: string, nullable: true}
+        reference: {type: string, nullable: true}
+        transfer_account_id: {type: integer, nullable: true}
+        contact_id: {type: integer, nullable: true}
+
+    TransactionDocument:
+      type: object
+      properties:
+        id: {type: integer}
+        transaction_id: {type: integer}
+        document_type: {type: string, enum: [bill, invoice, payout]}
+        document_id: {type: integer}
+        amount: {type: integer}
+        created_at: {type: string, format: date-time}
+
+    TransactionDocumentInput:
+      type: object
+      required: [document_type, document_id, amount]
+      properties:
+        document_type: {type: string, enum: [bill, invoice, payout]}
+        document_id: {type: integer}
+        amount: {type: integer}
+
+    Payout:
+      type: object
+      properties:
+        id: {type: integer}
+        outlet_name: {type: string}
+        platform: {type: string, enum: [Swiggy, Zomato]}
+        period_start: {type: string, format: date, nullable: true}
+        period_end: {type: string, format: date, nullable: true}
+        settlement_date: {type: string, format: date, nullable: true}
+        total_orders: {type: integer}
+        gross_sales_amt: {type: integer}
+        restaurant_discount_amt: {type: integer}
+        platform_commission_amt: {type: integer}
+        taxes_tcs_tds_amt: {type: integer}
+        marketing_ads_amt: {type: integer}
+        final_payout_amt: {type: integer}
+        utr_number: {type: string, nullable: true}
+        created_at: {type: string, format: date-time}
+
+    PayoutInput:
+      type: object
+      required: [outlet_name, platform]
+      properties:
+        outlet_name: {type: string}
+        platform: {type: string, enum: [Swiggy, Zomato]}
+        period_start: {type: string, format: date, nullable: true}
+        period_end: {type: string, format: date, nullable: true}
+        settlement_date: {type: string, format: date, nullable: true}
+        total_orders: {type: integer}
+        gross_sales_amt: {type: integer}
+        restaurant_discount_amt: {type: integer}
+        platform_commission_amt: {type: integer}
+        taxes_tcs_tds_amt: {type: integer}
+        marketing_ads_amt: {type: integer}
+        final_payout_amt: {type: integer}
+        utr_number: {type: string, nullable: true}
+
+    Dashboard:
+      type: object
+      properties:
+        total_accounts: {type: integer}
+        total_contacts: {type: integer}
+        total_bills: {type: integer}
+        total_invoices: {type: integer}
+        total_transactions: {type: integer}
+        bills_payable: {type: integer}
+        invoices_receivable: {type: integer}
+        overdue_bills: {type: integer}
+        overdue_invoices: {type: integer}
+        recent_transactions:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: integer}
+              type: {type: string}
+              amount: {type: integer}
+              transaction_date: {type: string, nullable: true}
+              description: {type: string, nullable: true}
+              account_name: {type: string, nullable: true}
+
+security:
+  - BasicAuth: []
+
+paths:
+  /accounts:
+    get:
+      summary: List accounts
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/Account'}}
+    post:
+      summary: Create account
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AccountInput'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Account'}
+  /accounts/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer}
+    get:
+      summary: Get account
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Account'}
+    put:
+      summary: Update account
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AccountInput'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Account'}
+    delete:
+      summary: Delete account
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: object, properties: {message: {type: string}}}
+
+  /contacts:
+    get:
+      summary: List contacts
+      parameters:
+        - name: type
+          in: query
+          schema: {type: string, enum: [vendor, customer]}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/Contact'}}
+    post:
+      summary: Create contact
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ContactInput'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Contact'}
+  /contacts/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer}
+    get:
+      summary: Get contact
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Contact'}
+    put:
+      summary: Update contact
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ContactInput'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Contact'}
+    delete:
+      summary: Delete contact
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: object, properties: {message: {type: string}}}
+
+  /bills:
+    get:
+      summary: List bills
+      parameters:
+        - name: contact_id
+          in: query
+          schema: {type: integer}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/Bill'}}
+    post:
+      summary: Create bill
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BillInput'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Bill'}
+  /bills/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer}
+    get:
+      summary: Get bill
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Bill'}
+    put:
+      summary: Update bill
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BillInput'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Bill'}
+    delete:
+      summary: Delete bill
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: object, properties: {message: {type: string}}}
+  /bills/{id}/links:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer}
+    get:
+      summary: Get bill links (transaction payments)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/TransactionDocument'
+                        - type: object
+                          properties:
+                            transaction_date: {type: string}
+                            description: {type: string}
+                            reference: {type: string}
+                            account_name: {type: string}
+
+  /invoices:
+    get:
+      summary: List invoices
+      parameters:
+        - name: contact_id
+          in: query
+          schema: {type: integer}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/Invoice'}}
+    post:
+      summary: Create invoice
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/InvoiceInput'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Invoice'}
+  /invoices/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer}
+    get:
+      summary: Get invoice
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Invoice'}
+    put:
+      summary: Update invoice
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/InvoiceInput'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Invoice'}
+    delete:
+      summary: Delete invoice
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: object, properties: {message: {type: string}}}
+  /invoices/{id}/links:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer}
+    get:
+      summary: Get invoice links (transaction payments)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/TransactionDocument'
+                        - type: object
+                          properties:
+                            transaction_date: {type: string}
+                            description: {type: string}
+                            reference: {type: string}
+                            account_name: {type: string}
+
+  /transactions:
+    get:
+      summary: List transactions
+      parameters:
+        - name: account_id
+          in: query
+          schema: {type: integer}
+        - name: contact_id
+          in: query
+          schema: {type: integer}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/Transaction'}}
+    post:
+      summary: Create transaction
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TransactionInput'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Transaction'}
+  /transactions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer}
+    get:
+      summary: Get transaction
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Transaction'}
+    put:
+      summary: Update transaction
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TransactionInput'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Transaction'}
+    delete:
+      summary: Delete transaction
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: object, properties: {message: {type: string}}}
+  /transactions/{id}/links:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer}
+    get:
+      summary: List transaction document links (bills/invoices)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/TransactionDocument'}}
+    post:
+      summary: Create transaction link
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TransactionDocumentInput'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/TransactionDocument'}
+  /transactions/{id}/links/{linkId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: linkId
+        in: path
+        required: true
+        schema: {type: integer}
+    delete:
+      summary: Delete transaction link
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: object, properties: {message: {type: string}}}
+
+  /payouts:
+    get:
+      summary: List payouts
+      parameters:
+        - name: platform
+          in: query
+          schema: {type: string, enum: [Swiggy, Zomato]}
+        - name: outlet_name
+          in: query
+          schema: {type: string}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/Payout'}}
+    post:
+      summary: Create payout
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PayoutInput'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Payout'}
+  /payouts/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: integer}
+    get:
+      summary: Get payout
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Payout'}
+    put:
+      summary: Update payout
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PayoutInput'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Payout'}
+    delete:
+      summary: Delete payout
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: object, properties: {message: {type: string}}}
+  /payouts/{id}/links:
+    get:
+      summary: Get payout links
+      description: Get all payment transactions linked to a specific payout.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/TransactionDocument'}}
+
+  /dashboard:
+    get:
+      summary: Get dashboard totals and analytics
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/Dashboard'}
