@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,6 +11,27 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/satheeshds/accounting/models"
 )
+
+const payoutSelectQuery = `SELECT id, outlet_name, platform, period_start, period_end, settlement_date,
+		total_orders, gross_sales_amt, restaurant_discount_amt, platform_commission_amt,
+		taxes_tcs_tds_amt, marketing_ads_amt, final_payout_amt, utr_number, created_at,
+		COALESCE((SELECT SUM(td.amount) FROM transaction_documents td WHERE td.document_type = 'payout' AND td.document_id = payouts.id), 0)
+		FROM payouts`
+
+func scanPayout(scanner interface{ Scan(...any) error }) (models.Payout, error) {
+	var p models.Payout
+	err := scanner.Scan(&p.ID, &p.OutletName, &p.Platform, &p.PeriodStart, &p.PeriodEnd, &p.SettlementDate,
+		&p.TotalOrders, &p.GrossSalesAmt, &p.RestaurantDiscountAmt, &p.PlatformCommissionAmt,
+		&p.TaxesTcsTdsAmt, &p.MarketingAdsAmt, &p.FinalPayoutAmt, &p.UtrNumber, &p.CreatedAt, &p.Allocated)
+	if err == nil {
+		p.Unallocated = models.Money(int64(p.FinalPayoutAmt) - int64(p.Allocated))
+	}
+	return p, err
+}
+
+func getPayoutByID(id int) (models.Payout, error) {
+	return scanPayout(DB.QueryRow(payoutSelectQuery+" WHERE id = ?", id))
+}
 
 // ListPayouts lists all payouts
 // @Summary      List payouts
@@ -23,12 +46,7 @@ import (
 // @Router       /payouts [get]
 // @Security     BasicAuth
 func ListPayouts(w http.ResponseWriter, r *http.Request) {
-	query := `SELECT id, outlet_name, platform, period_start, period_end, settlement_date,
-		total_orders, gross_sales_amt, restaurant_discount_amt, platform_commission_amt,
-		taxes_tcs_tds_amt, marketing_ads_amt, final_payout_amt, utr_number, created_at,
-		COALESCE((SELECT SUM(td.amount) FROM transaction_documents td WHERE td.document_type = 'payout' AND td.document_id = payouts.id), 0)
-		FROM payouts`
-
+	query := payoutSelectQuery
 	var conditions []string
 	var args []any
 
@@ -63,14 +81,11 @@ func ListPayouts(w http.ResponseWriter, r *http.Request) {
 
 	var payouts []models.Payout
 	for rows.Next() {
-		var p models.Payout
-		if err := rows.Scan(&p.ID, &p.OutletName, &p.Platform, &p.PeriodStart, &p.PeriodEnd, &p.SettlementDate,
-			&p.TotalOrders, &p.GrossSalesAmt, &p.RestaurantDiscountAmt, &p.PlatformCommissionAmt,
-			&p.TaxesTcsTdsAmt, &p.MarketingAdsAmt, &p.FinalPayoutAmt, &p.UtrNumber, &p.CreatedAt, &p.Allocated); err != nil {
+		p, err := scanPayout(rows)
+		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		p.Unallocated = p.FinalPayoutAmt - p.Allocated
 		payouts = append(payouts, p)
 	}
 	if payouts == nil {
@@ -91,20 +106,15 @@ func ListPayouts(w http.ResponseWriter, r *http.Request) {
 // @Security     BasicAuth
 func GetPayout(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
-	var p models.Payout
-	err := DB.QueryRow(`SELECT id, outlet_name, platform, period_start, period_end, settlement_date,
-		total_orders, gross_sales_amt, restaurant_discount_amt, platform_commission_amt,
-		taxes_tcs_tds_amt, marketing_ads_amt, final_payout_amt, utr_number, created_at,
-		COALESCE((SELECT SUM(td.amount) FROM transaction_documents td WHERE td.document_type = 'payout' AND td.document_id = payouts.id), 0)
-		FROM payouts WHERE id = ?`, id).
-		Scan(&p.ID, &p.OutletName, &p.Platform, &p.PeriodStart, &p.PeriodEnd, &p.SettlementDate,
-			&p.TotalOrders, &p.GrossSalesAmt, &p.RestaurantDiscountAmt, &p.PlatformCommissionAmt,
-			&p.TaxesTcsTdsAmt, &p.MarketingAdsAmt, &p.FinalPayoutAmt, &p.UtrNumber, &p.CreatedAt, &p.Allocated)
+	p, err := getPayoutByID(id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "payout not found")
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "payout not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
-	p.Unallocated = p.FinalPayoutAmt - p.Allocated
 	writeJSON(w, http.StatusOK, p)
 }
 
@@ -178,22 +188,25 @@ func CreatePayout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := DB.Exec(`INSERT INTO payouts (outlet_name, platform, period_start, period_end, settlement_date,
+	var id int
+	err := DB.QueryRow(`INSERT INTO payouts (outlet_name, platform, period_start, period_end, settlement_date,
 		total_orders, gross_sales_amt, restaurant_discount_amt, platform_commission_amt,
 		taxes_tcs_tds_amt, marketing_ads_amt, final_payout_amt, utr_number)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		input.OutletName, input.Platform, input.PeriodStart, input.PeriodEnd, input.SettlementDate,
 		input.TotalOrders, input.GrossSalesAmt, input.RestaurantDiscountAmt, input.PlatformCommissionAmt,
-		input.TaxesTcsTdsAmt, input.MarketingAdsAmt, input.FinalPayoutAmt, input.UtrNumber)
+		input.TaxesTcsTdsAmt, input.MarketingAdsAmt, input.FinalPayoutAmt, input.UtrNumber).Scan(&id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	id, _ := result.LastInsertId()
-	r2 := r.Clone(r.Context())
-	chi.RouteContext(r2.Context()).URLParams.Add("id", strconv.FormatInt(id, 10))
-	GetPayout(w, r2)
+	p, err := getPayoutByID(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch created payout: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, p)
 }
 
 // UpdatePayout updates an existing payout record
@@ -221,6 +234,7 @@ func UpdatePayout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	input.Platform = strings.ToLower(input.Platform)
 	res, err := DB.Exec(`UPDATE payouts SET outlet_name = ?, platform = ?, period_start = ?, period_end = ?,
 		settlement_date = ?, total_orders = ?, gross_sales_amt = ?, restaurant_discount_amt = ?,
 		platform_commission_amt = ?, taxes_tcs_tds_amt = ?, marketing_ads_amt = ?, final_payout_amt = ?,
@@ -236,7 +250,13 @@ func UpdatePayout(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "payout not found")
 		return
 	}
-	GetPayout(w, r)
+
+	p, err := getPayoutByID(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch updated payout: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
 }
 
 // DeletePayout deletes a payout record

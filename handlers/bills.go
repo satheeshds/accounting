@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,6 +11,28 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/satheeshds/accounting/models"
 )
+
+const billSelectQuery = `SELECT b.id, b.contact_id, b.bill_number, b.issue_date, b.due_date, b.amount,
+		b.status, b.file_url, b.notes, b.created_at, b.updated_at,
+		c.name,
+		COALESCE((SELECT SUM(td.amount) FROM transaction_documents td WHERE td.document_type = 'bill' AND td.document_id = b.id), 0)
+		FROM bills b
+		LEFT JOIN contacts c ON b.contact_id = c.id`
+
+func scanBill(scanner interface{ Scan(...any) error }) (models.Bill, error) {
+	var b models.Bill
+	err := scanner.Scan(&b.ID, &b.ContactID, &b.BillNumber, &b.IssueDate, &b.DueDate,
+		&b.Amount, &b.Status, &b.FileURL, &b.Notes, &b.CreatedAt, &b.UpdatedAt,
+		&b.ContactName, &b.Allocated)
+	if err == nil {
+		b.Unallocated = models.Money(int64(b.Amount) - int64(b.Allocated))
+	}
+	return b, err
+}
+
+func getBillByID(id int) (models.Bill, error) {
+	return scanBill(DB.QueryRow(billSelectQuery+" WHERE b.id = ?", id))
+}
 
 // ListBills lists all bills
 // @Summary      List bills
@@ -21,13 +45,7 @@ import (
 // @Router       /bills [get]
 // @Security     BasicAuth
 func ListBills(w http.ResponseWriter, r *http.Request) {
-	query := `SELECT b.id, b.contact_id, b.bill_number, b.issue_date, b.due_date, b.amount,
-		b.status, b.file_url, b.notes, b.created_at, b.updated_at,
-		c.name,
-		COALESCE((SELECT SUM(td.amount) FROM transaction_documents td WHERE td.document_type = 'bill' AND td.document_id = b.id), 0)
-		FROM bills b
-		LEFT JOIN contacts c ON b.contact_id = c.id`
-
+	query := billSelectQuery
 	var conditions []string
 	var args []any
 
@@ -67,14 +85,11 @@ func ListBills(w http.ResponseWriter, r *http.Request) {
 
 	var bills []models.Bill
 	for rows.Next() {
-		var b models.Bill
-		if err := rows.Scan(&b.ID, &b.ContactID, &b.BillNumber, &b.IssueDate, &b.DueDate,
-			&b.Amount, &b.Status, &b.FileURL, &b.Notes, &b.CreatedAt, &b.UpdatedAt,
-			&b.ContactName, &b.Allocated); err != nil {
+		b, err := scanBill(rows)
+		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		b.Unallocated = b.Amount - b.Allocated
 		bills = append(bills, b)
 	}
 	if bills == nil {
@@ -95,20 +110,15 @@ func ListBills(w http.ResponseWriter, r *http.Request) {
 // @Security     BasicAuth
 func GetBill(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
-	var b models.Bill
-	err := DB.QueryRow(`SELECT b.id, b.contact_id, b.bill_number, b.issue_date, b.due_date, b.amount,
-		b.status, b.file_url, b.notes, b.created_at, b.updated_at,
-		c.name,
-		COALESCE((SELECT SUM(td.amount) FROM transaction_documents td WHERE td.document_type = 'bill' AND td.document_id = b.id), 0)
-		FROM bills b LEFT JOIN contacts c ON b.contact_id = c.id WHERE b.id = ?`, id).
-		Scan(&b.ID, &b.ContactID, &b.BillNumber, &b.IssueDate, &b.DueDate,
-			&b.Amount, &b.Status, &b.FileURL, &b.Notes, &b.CreatedAt, &b.UpdatedAt,
-			&b.ContactName, &b.Allocated)
+	b, err := getBillByID(id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "bill not found")
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "bill not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
-	b.Unallocated = b.Amount - b.Allocated
 	writeJSON(w, http.StatusOK, b)
 }
 
@@ -134,20 +144,22 @@ func CreateBill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := DB.Exec(`INSERT INTO bills (contact_id, bill_number, issue_date, due_date, amount, status, file_url, notes)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+	var id int
+	err := DB.QueryRow(`INSERT INTO bills (contact_id, bill_number, issue_date, due_date, amount, status, file_url, notes)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		input.ContactID, input.BillNumber, input.IssueDate, input.DueDate,
-		input.Amount, input.Status, input.FileURL, input.Notes)
+		input.Amount, input.Status, input.FileURL, input.Notes).Scan(&id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	id, _ := result.LastInsertId()
-	// Re-fetch to return full object
-	r2 := r.Clone(r.Context())
-	chi.RouteContext(r2.Context()).URLParams.Add("id", strconv.FormatInt(id, 10))
-	GetBill(w, r2)
+	b, err := getBillByID(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch created bill: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, b)
 }
 
 // UpdateBill updates an existing bill
@@ -187,7 +199,12 @@ func UpdateBill(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "bill not found")
 		return
 	}
-	GetBill(w, r)
+	b, err := getBillByID(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch updated bill: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, b)
 }
 
 // DeleteBill deletes a bill

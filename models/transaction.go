@@ -7,7 +7,7 @@ type Transaction struct {
 	ID                int       `json:"id"`
 	AccountID         int       `json:"account_id"`
 	Type              string    `json:"type"` // income, expense, transfer
-	Amount            int       `json:"amount"`
+	Amount            Money     `json:"amount"`
 	TransactionDate   *string   `json:"transaction_date"`
 	Description       *string   `json:"description"`
 	Reference         *string   `json:"reference"`
@@ -19,15 +19,15 @@ type Transaction struct {
 	AccountName         *string `json:"account_name,omitempty"`
 	TransferAccountName *string `json:"transfer_account_name,omitempty"`
 	ContactName         *string `json:"contact_name,omitempty"`
-	Allocated           int     `json:"allocated"`
-	Unallocated         int     `json:"unallocated"`
+	Allocated           Money   `json:"allocated"`
+	Unallocated         Money   `json:"unallocated"`
 }
 
 // TransactionInput is used for creating/updating transactions.
 type TransactionInput struct {
 	AccountID         int     `json:"account_id"`
 	Type              string  `json:"type"`
-	Amount            int     `json:"amount"`
+	Amount            Money   `json:"amount"`
 	TransactionDate   *string `json:"transaction_date"`
 	Description       *string `json:"description"`
 	Reference         *string `json:"reference"`

@@ -9,7 +9,7 @@ type Invoice struct {
 	InvoiceNumber string    `json:"invoice_number"`
 	IssueDate     *string   `json:"issue_date"`
 	DueDate       *string   `json:"due_date"`
-	Amount        int       `json:"amount"`
+	Amount        Money     `json:"amount"`
 	Status        string    `json:"status"`
 	FileURL       *string   `json:"file_url"`
 	Notes         *string   `json:"notes"`
@@ -17,8 +17,8 @@ type Invoice struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 	// Computed fields
 	ContactName *string `json:"contact_name,omitempty"`
-	Allocated   int     `json:"allocated"`
-	Unallocated int     `json:"unallocated"`
+	Allocated   Money   `json:"allocated"`
+	Unallocated Money   `json:"unallocated"`
 }
 
 // InvoiceInput is used for creating/updating invoices.
@@ -27,7 +27,7 @@ type InvoiceInput struct {
 	InvoiceNumber string  `json:"invoice_number"`
 	IssueDate     *string `json:"issue_date"`
 	DueDate       *string `json:"due_date"`
-	Amount        int     `json:"amount"`
+	Amount        Money   `json:"amount"`
 	Status        string  `json:"status"`
 	FileURL       *string `json:"file_url"`
 	Notes         *string `json:"notes"`

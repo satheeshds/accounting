@@ -7,8 +7,8 @@ type Account struct {
 	ID             int       `json:"id"`
 	Name           string    `json:"name"`
 	Type           string    `json:"type"` // bank, cash, credit_card
-	OpeningBalance int       `json:"opening_balance"`
-	Balance        int       `json:"balance"` // Computed
+	OpeningBalance Money     `json:"opening_balance"`
+	Balance        Money     `json:"balance"` // Computed
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }
@@ -17,7 +17,7 @@ type Account struct {
 type AccountInput struct {
 	Name           string `json:"name"`
 	Type           string `json:"type"`
-	OpeningBalance int    `json:"opening_balance"`
+	OpeningBalance Money  `json:"opening_balance"`
 }
 
 func (a *AccountInput) Validate() string {

@@ -29,8 +29,12 @@ func scanTransaction(scanner interface{ Scan(...any) error }) (models.Transactio
 		&t.Description, &t.Reference, &t.TransferAccountID, &t.ContactID,
 		&t.CreatedAt, &t.UpdatedAt,
 		&t.AccountName, &t.TransferAccountName, &t.ContactName, &t.Allocated)
-	t.Unallocated = t.Amount - t.Allocated
+	t.Unallocated = models.Money(int64(t.Amount) - int64(t.Allocated))
 	return t, err
+}
+
+func getTransactionByID(id int) (models.Transaction, error) {
+	return scanTransaction(DB.QueryRow(txnSelectQuery+" WHERE t.id = ?", id))
 }
 
 // ListTransactions lists all transactions
@@ -103,7 +107,7 @@ func ListTransactions(w http.ResponseWriter, r *http.Request) {
 // @Security     BasicAuth
 func GetTransaction(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
-	t, err := scanTransaction(DB.QueryRow(txnSelectQuery+" WHERE t.id = ?", id))
+	t, err := getTransactionByID(id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "transaction not found")
 		return
@@ -148,14 +152,14 @@ func CreateTransaction(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Expense on source account
-		res1, err := tx.Exec(`INSERT INTO transactions (account_id, type, amount, transaction_date, description, reference, transfer_account_id, contact_id)
-			VALUES (?, 'expense', ?, ?, ?, ?, ?, ?)`,
-			input.AccountID, input.Amount, input.TransactionDate, input.Description, ref, input.TransferAccountID, input.ContactID)
+		var id1 int
+		err = tx.QueryRow(`INSERT INTO transactions (account_id, type, amount, transaction_date, description, reference, transfer_account_id, contact_id)
+			VALUES (?, 'expense', ?, ?, ?, ?, ?, ?) RETURNING id`,
+			input.AccountID, input.Amount, input.TransactionDate, input.Description, ref, input.TransferAccountID, input.ContactID).Scan(&id1)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		id1, _ := res1.LastInsertId()
 
 		// Income on destination account
 		_, err = tx.Exec(`INSERT INTO transactions (account_id, type, amount, transaction_date, description, reference, transfer_account_id, contact_id)
@@ -177,23 +181,32 @@ func CreateTransaction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		t, _ := scanTransaction(DB.QueryRow(txnSelectQuery+" WHERE t.id = ?", id1))
+		t, err := getTransactionByID(id1)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to re-fetch created transfer transaction: "+err.Error())
+			return
+		}
 		writeJSON(w, http.StatusCreated, t)
 		return
 	}
 
 	// Normal income/expense
-	result, err := DB.Exec(`INSERT INTO transactions (account_id, type, amount, transaction_date, description, reference, transfer_account_id, contact_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		input.AccountID, input.Type, input.Amount, input.TransactionDate, input.Description, input.Reference, input.TransferAccountID, input.ContactID)
+	var id int
+	err := DB.QueryRow(`INSERT INTO transactions (account_id, type, amount, transaction_date, description, reference, transfer_account_id, contact_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		input.AccountID, input.Type, input.Amount, input.TransactionDate,
+		input.Description, input.Reference, input.TransferAccountID, input.ContactID).Scan(&id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	id, _ := result.LastInsertId()
-	t, _ := scanTransaction(DB.QueryRow(txnSelectQuery+" WHERE t.id = ?", id))
-	writeJSON(w, http.StatusCreated, t)
+	txn, err := getTransactionByID(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch created transaction: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, txn)
 }
 
 // UpdateTransaction updates an existing transaction
@@ -233,7 +246,11 @@ func UpdateTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, _ := scanTransaction(DB.QueryRow(txnSelectQuery+" WHERE t.id = ?", id))
+	t, err := getTransactionByID(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch updated transaction: "+err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, t)
 }
 
@@ -322,7 +339,7 @@ func CreateTransactionLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check transaction exists and get its amount
-	var txnAmount int
+	var txnAmount models.Money
 	err := DB.QueryRow("SELECT amount FROM transactions WHERE id = ?", txnID).Scan(&txnAmount)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "transaction not found")
@@ -330,16 +347,16 @@ func CreateTransactionLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check transaction unallocated balance
-	var txnAllocated int
+	var txnAllocated models.Money
 	DB.QueryRow("SELECT COALESCE(SUM(amount), 0) FROM transaction_documents WHERE transaction_id = ?", txnID).Scan(&txnAllocated)
-	txnUnallocated := txnAmount - txnAllocated
+	txnUnallocated := models.Money(int64(txnAmount) - int64(txnAllocated))
 	if input.Amount > txnUnallocated {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("transaction only has %d paise unallocated (requested %d)", txnUnallocated, input.Amount))
 		return
 	}
 
 	// Check document exists and get its amount
-	var docAmount int
+	var docAmount models.Money
 	var docTable, amountField string
 	switch input.DocumentType {
 	case "bill":
@@ -362,24 +379,23 @@ func CreateTransactionLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check document unallocated balance
-	var docAllocated int
+	var docAllocated models.Money
 	DB.QueryRow("SELECT COALESCE(SUM(amount), 0) FROM transaction_documents WHERE document_type = ? AND document_id = ?",
 		input.DocumentType, input.DocumentID).Scan(&docAllocated)
-	docUnallocated := docAmount - docAllocated
+	docUnallocated := models.Money(int64(docAmount) - int64(docAllocated))
 	if input.Amount > docUnallocated {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("%s only has %d paise unallocated (requested %d)", input.DocumentType, docUnallocated, input.Amount))
 		return
 	}
 
 	// Create the link
-	result, err := DB.Exec(`INSERT INTO transaction_documents (transaction_id, document_type, document_id, amount)
-		VALUES (?, ?, ?, ?)`, txnID, input.DocumentType, input.DocumentID, input.Amount)
+	var id int
+	err = DB.QueryRow(`INSERT INTO transaction_documents (transaction_id, document_type, document_id, amount)
+		VALUES (?, ?, ?, ?) RETURNING id`, txnID, input.DocumentType, input.DocumentID, input.Amount).Scan(&id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
-	id, _ := result.LastInsertId()
 
 	// Handle automated status updates
 	updateDocumentStatus(input.DocumentType, input.DocumentID)
@@ -428,7 +444,7 @@ func DeleteTransactionLink(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "deleted"})
 }
 func updateDocumentStatus(docType string, docID int) {
-	var total, allocated int
+	var total, allocated models.Money
 	var table, fullStatus, amountField string
 	switch docType {
 	case "bill":

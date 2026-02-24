@@ -8,7 +8,7 @@ type TransactionDocument struct {
 	TransactionID int       `json:"transaction_id"`
 	DocumentType  string    `json:"document_type"` // bill, invoice
 	DocumentID    int       `json:"document_id"`
-	Amount        int       `json:"amount"`
+	Amount        Money     `json:"amount"`
 	CreatedAt     time.Time `json:"created_at"`
 }
 
@@ -16,7 +16,7 @@ type TransactionDocument struct {
 type TransactionDocumentInput struct {
 	DocumentType string `json:"document_type"`
 	DocumentID   int    `json:"document_id"`
-	Amount       int    `json:"amount"`
+	Amount       Money  `json:"amount"`
 }
 
 func (td *TransactionDocumentInput) Validate() string {

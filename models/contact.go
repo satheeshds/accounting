@@ -9,9 +9,9 @@ type Contact struct {
 	Type            string    `json:"type"` // vendor, customer
 	Email           *string   `json:"email"`
 	Phone           *string   `json:"phone"`
-	TotalAmount     int       `json:"total_amount"`     // Computed: Sum of bills/invoices
-	AllocatedAmount int       `json:"allocated_amount"` // Computed: Sum of payments
-	Balance         int       `json:"balance"`          // Computed: Total - Allocated
+	TotalAmount     Money     `json:"total_amount"`     // Computed: Sum of bills/invoices
+	AllocatedAmount Money     `json:"allocated_amount"` // Computed: Sum of payments
+	Balance         Money     `json:"balance"`          // Computed: Total - Allocated
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }

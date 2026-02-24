@@ -7,10 +7,10 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/duckdb/duckdb-go/v2"
 )
 
-// Open creates and returns a SQLite database connection with WAL mode enabled.
+// Open creates and returns a DuckDB database connection.
 // The database file is stored at the path specified by the DB_PATH environment variable,
 // defaulting to "./data/accounting.db".
 func Open() (*sql.DB, error) {
@@ -22,19 +22,18 @@ func Open() (*sql.DB, error) {
 	// Ensure the directory exists
 	dir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, fmt.Errorf("creating db directory: %w", err)
+		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)")
+	db, err := sql.Open("duckdb", dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("opening database: %w", err)
+		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Verify connection
 	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("pinging database: %w", err)
+		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	slog.Info("database connected", "path", dbPath)
+	slog.Info("connected to duckdb", "path", dbPath)
 	return db, nil
 }

@@ -125,17 +125,19 @@ func CreateContact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := DB.Exec("INSERT INTO contacts (name, type, email, phone) VALUES (?, ?, ?, ?)",
-		input.Name, input.Type, input.Email, input.Phone)
+	var id int
+	err := DB.QueryRow("INSERT INTO contacts (name, type, email, phone) VALUES (?, ?, ?, ?) RETURNING id",
+		input.Name, input.Type, input.Email, input.Phone).Scan(&id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	id, _ := result.LastInsertId()
-	var c models.Contact
-	DB.QueryRow("SELECT id, name, type, email, phone, created_at, updated_at FROM contacts WHERE id = ?", id).
-		Scan(&c.ID, &c.Name, &c.Type, &c.Email, &c.Phone, &c.CreatedAt, &c.UpdatedAt)
+	c, err := scanContact(DB.QueryRow(contactSelectQuery+" WHERE id = ?", id))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch created contact: "+err.Error())
+		return
+	}
 	writeJSON(w, http.StatusCreated, c)
 }
 
@@ -175,9 +177,11 @@ func UpdateContact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var c models.Contact
-	DB.QueryRow("SELECT id, name, type, email, phone, created_at, updated_at FROM contacts WHERE id = ?", id).
-		Scan(&c.ID, &c.Name, &c.Type, &c.Email, &c.Phone, &c.CreatedAt, &c.UpdatedAt)
+	c, err := scanContact(DB.QueryRow(contactSelectQuery+" WHERE id = ?", id))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch updated contact: "+err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, c)
 }
 

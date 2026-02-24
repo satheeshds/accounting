@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,6 +11,28 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/satheeshds/accounting/models"
 )
+
+const invoiceSelectQuery = `SELECT i.id, i.contact_id, i.invoice_number, i.issue_date, i.due_date, i.amount,
+		i.status, i.file_url, i.notes, i.created_at, i.updated_at,
+		c.name,
+		COALESCE((SELECT SUM(td.amount) FROM transaction_documents td WHERE td.document_type = 'invoice' AND td.document_id = i.id), 0)
+		FROM invoices i
+		LEFT JOIN contacts c ON i.contact_id = c.id`
+
+func scanInvoice(scanner interface{ Scan(...any) error }) (models.Invoice, error) {
+	var inv models.Invoice
+	err := scanner.Scan(&inv.ID, &inv.ContactID, &inv.InvoiceNumber, &inv.IssueDate, &inv.DueDate,
+		&inv.Amount, &inv.Status, &inv.FileURL, &inv.Notes, &inv.CreatedAt, &inv.UpdatedAt,
+		&inv.ContactName, &inv.Allocated)
+	if err == nil {
+		inv.Unallocated = models.Money(int64(inv.Amount) - int64(inv.Allocated))
+	}
+	return inv, err
+}
+
+func getInvoiceByID(id int) (models.Invoice, error) {
+	return scanInvoice(DB.QueryRow(invoiceSelectQuery+" WHERE i.id = ?", id))
+}
 
 // ListInvoices lists all invoices
 // @Summary      List invoices
@@ -21,13 +45,7 @@ import (
 // @Router       /invoices [get]
 // @Security     BasicAuth
 func ListInvoices(w http.ResponseWriter, r *http.Request) {
-	query := `SELECT i.id, i.contact_id, i.invoice_number, i.issue_date, i.due_date, i.amount,
-		i.status, i.file_url, i.notes, i.created_at, i.updated_at,
-		c.name,
-		COALESCE((SELECT SUM(td.amount) FROM transaction_documents td WHERE td.document_type = 'invoice' AND td.document_id = i.id), 0)
-		FROM invoices i
-		LEFT JOIN contacts c ON i.contact_id = c.id`
-
+	query := invoiceSelectQuery
 	var conditions []string
 	var args []any
 
@@ -67,14 +85,11 @@ func ListInvoices(w http.ResponseWriter, r *http.Request) {
 
 	var invoices []models.Invoice
 	for rows.Next() {
-		var inv models.Invoice
-		if err := rows.Scan(&inv.ID, &inv.ContactID, &inv.InvoiceNumber, &inv.IssueDate, &inv.DueDate,
-			&inv.Amount, &inv.Status, &inv.FileURL, &inv.Notes, &inv.CreatedAt, &inv.UpdatedAt,
-			&inv.ContactName, &inv.Allocated); err != nil {
+		inv, err := scanInvoice(rows)
+		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		inv.Unallocated = inv.Amount - inv.Allocated
 		invoices = append(invoices, inv)
 	}
 	if invoices == nil {
@@ -95,20 +110,15 @@ func ListInvoices(w http.ResponseWriter, r *http.Request) {
 // @Security     BasicAuth
 func GetInvoice(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
-	var inv models.Invoice
-	err := DB.QueryRow(`SELECT i.id, i.contact_id, i.invoice_number, i.issue_date, i.due_date, i.amount,
-		i.status, i.file_url, i.notes, i.created_at, i.updated_at,
-		c.name,
-		COALESCE((SELECT SUM(td.amount) FROM transaction_documents td WHERE td.document_type = 'invoice' AND td.document_id = i.id), 0)
-		FROM invoices i LEFT JOIN contacts c ON i.contact_id = c.id WHERE i.id = ?`, id).
-		Scan(&inv.ID, &inv.ContactID, &inv.InvoiceNumber, &inv.IssueDate, &inv.DueDate,
-			&inv.Amount, &inv.Status, &inv.FileURL, &inv.Notes, &inv.CreatedAt, &inv.UpdatedAt,
-			&inv.ContactName, &inv.Allocated)
+	inv, err := getInvoiceByID(id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "invoice not found")
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "invoice not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
-	inv.Unallocated = inv.Amount - inv.Allocated
 	writeJSON(w, http.StatusOK, inv)
 }
 
@@ -134,19 +144,22 @@ func CreateInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := DB.Exec(`INSERT INTO invoices (contact_id, invoice_number, issue_date, due_date, amount, status, file_url, notes)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+	var id int
+	err := DB.QueryRow(`INSERT INTO invoices (contact_id, invoice_number, issue_date, due_date, amount, status, file_url, notes)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		input.ContactID, input.InvoiceNumber, input.IssueDate, input.DueDate,
-		input.Amount, input.Status, input.FileURL, input.Notes)
+		input.Amount, input.Status, input.FileURL, input.Notes).Scan(&id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	id, _ := result.LastInsertId()
-	r2 := r.Clone(r.Context())
-	chi.RouteContext(r2.Context()).URLParams.Add("id", strconv.FormatInt(id, 10))
-	GetInvoice(w, r2)
+	inv, err := getInvoiceByID(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch created invoice: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, inv)
 }
 
 // UpdateInvoice updates an existing invoice
@@ -186,7 +199,12 @@ func UpdateInvoice(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "invoice not found")
 		return
 	}
-	GetInvoice(w, r)
+	inv, err := getInvoiceByID(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch updated invoice: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, inv)
 }
 
 // DeleteInvoice deletes an invoice

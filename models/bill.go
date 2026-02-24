@@ -9,7 +9,7 @@ type Bill struct {
 	BillNumber string    `json:"bill_number"`
 	IssueDate  *string   `json:"issue_date"`
 	DueDate    *string   `json:"due_date"`
-	Amount     int       `json:"amount"`
+	Amount     Money     `json:"amount"`
 	Status     string    `json:"status"`
 	FileURL    *string   `json:"file_url"`
 	Notes      *string   `json:"notes"`
@@ -17,8 +17,8 @@ type Bill struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 	// Computed fields
 	ContactName *string `json:"contact_name,omitempty"`
-	Allocated   int     `json:"allocated"`   // sum of linked transaction_documents amounts
-	Unallocated int     `json:"unallocated"` // amount - allocated
+	Allocated   Money   `json:"allocated"`   // sum of linked transaction_documents amounts
+	Unallocated Money   `json:"unallocated"` // amount - allocated
 }
 
 // BillInput is used for creating/updating bills.
@@ -27,7 +27,7 @@ type BillInput struct {
 	BillNumber string  `json:"bill_number"`
 	IssueDate  *string `json:"issue_date"`
 	DueDate    *string `json:"due_date"`
-	Amount     int     `json:"amount"`
+	Amount     Money   `json:"amount"`
 	Status     string  `json:"status"`
 	FileURL    *string `json:"file_url"`
 	Notes      *string `json:"notes"`

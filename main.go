@@ -1,5 +1,7 @@
 package main
 
+//go:generate swag init
+
 import (
 	"embed"
 	"fmt"

@@ -16,6 +16,16 @@ const accountSelectQuery = `SELECT id, name, type, opening_balance, created_at, 
 	) as balance
 	FROM accounts`
 
+func scanAccount(scanner interface{ Scan(...any) error }) (models.Account, error) {
+	var a models.Account
+	err := scanner.Scan(&a.ID, &a.Name, &a.Type, &a.OpeningBalance, &a.CreatedAt, &a.UpdatedAt, &a.Balance)
+	return a, err
+}
+
+func getAccountByID(id int) (models.Account, error) {
+	return scanAccount(DB.QueryRow(accountSelectQuery+" WHERE accounts.id = ?", id))
+}
+
 // ListAccounts lists all accounts
 // @Summary      List accounts
 // @Description  Get a list of all bank accounts, cash, and credit cards with current balances.
@@ -100,17 +110,19 @@ func CreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := DB.Exec("INSERT INTO accounts (name, type, opening_balance) VALUES (?, ?, ?)",
-		input.Name, input.Type, input.OpeningBalance)
+	var id int
+	err := DB.QueryRow("INSERT INTO accounts (name, type, opening_balance) VALUES (?, ?, ?) RETURNING id",
+		input.Name, input.Type, input.OpeningBalance).Scan(&id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	id, _ := result.LastInsertId()
-	var a models.Account
-	DB.QueryRow("SELECT id, name, type, opening_balance, created_at, updated_at FROM accounts WHERE id = ?", id).
-		Scan(&a.ID, &a.Name, &a.Type, &a.OpeningBalance, &a.CreatedAt, &a.UpdatedAt)
+	a, err := scanAccount(DB.QueryRow(accountSelectQuery+" WHERE accounts.id = ?", id))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch created account: "+err.Error())
+		return
+	}
 	writeJSON(w, http.StatusCreated, a)
 }
 
@@ -150,9 +162,11 @@ func UpdateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var a models.Account
-	DB.QueryRow("SELECT id, name, type, opening_balance, created_at, updated_at FROM accounts WHERE id = ?", id).
-		Scan(&a.ID, &a.Name, &a.Type, &a.OpeningBalance, &a.CreatedAt, &a.UpdatedAt)
+	a, err := scanAccount(DB.QueryRow(accountSelectQuery+" WHERE accounts.id = ?", id))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch updated account: "+err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, a)
 }
 
