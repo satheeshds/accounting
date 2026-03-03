@@ -108,7 +108,7 @@ var migrations = []string{
 	)`,
 
 	// Payouts from Swiggy/Zomato/Swiggy-Dineout
-	`CREATE OR REPLACE TABLE payouts (
+	`CREATE TABLE IF NOT EXISTS payouts (
 		id INTEGER PRIMARY KEY DEFAULT nextval('payouts_id_seq'),
 		outlet_name TEXT NOT NULL,
 		platform TEXT NOT NULL,
