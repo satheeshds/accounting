@@ -57,8 +57,13 @@ func ListRecurringPayments(w http.ResponseWriter, r *http.Request) {
 		args = append(args, s)
 	}
 	if aid := r.URL.Query().Get("account_id"); aid != "" {
+		accountID, err := strconv.Atoi(aid)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid account_id")
+			return
+		}
 		conditions = append(conditions, "r.account_id = ?")
-		args = append(args, aid)
+		args = append(args, accountID)
 	}
 	if tp := r.URL.Query().Get("type"); tp != "" {
 		conditions = append(conditions, "r.type = ?")
@@ -184,11 +189,11 @@ func UpdateRecurringPayment(w http.ResponseWriter, r *http.Request) {
 
 	res, err := DB.Exec(`UPDATE recurring_payments SET
 		name = ?, type = ?, amount = ?, account_id = ?, contact_id = ?,
-		frequency = ?, interval = ?, start_date = ?, end_date = ?, next_due_date = ?,
+		frequency = ?, interval = ?, start_date = ?, end_date = ?, next_due_date = ?, last_generated_date = ?,
 		status = ?, description = ?, reference = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?`,
 		input.Name, input.Type, input.Amount, input.AccountID, input.ContactID,
-		input.Frequency, input.Interval, input.StartDate, input.EndDate, input.NextDueDate,
+		input.Frequency, input.Interval, input.StartDate, input.EndDate, input.NextDueDate, input.LastGeneratedDate,
 		input.Status, input.Description, input.Reference, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

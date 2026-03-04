@@ -28,19 +28,20 @@ type RecurringPayment struct {
 
 // RecurringPaymentInput is used for creating/updating recurring payments.
 type RecurringPaymentInput struct {
-	Name        string  `json:"name"`
-	Type        string  `json:"type"`
-	Amount      Money   `json:"amount"`
-	AccountID   int     `json:"account_id"`
-	ContactID   *int    `json:"contact_id"`
-	Frequency   string  `json:"frequency"`
-	Interval    int     `json:"interval"`
-	StartDate   string  `json:"start_date"`
-	EndDate     *string `json:"end_date"`
-	NextDueDate *string `json:"next_due_date"`
-	Status      string  `json:"status"`
-	Description *string `json:"description"`
-	Reference   *string `json:"reference"`
+	Name              string  `json:"name"`
+	Type              string  `json:"type"`
+	Amount            Money   `json:"amount"`
+	AccountID         int     `json:"account_id"`
+	ContactID         *int    `json:"contact_id"`
+	Frequency         string  `json:"frequency"`
+	Interval          int     `json:"interval"`
+	StartDate         string  `json:"start_date"`
+	EndDate           *string `json:"end_date"`
+	NextDueDate       *string `json:"next_due_date"`
+	LastGeneratedDate *string `json:"last_generated_date"`
+	Status            string  `json:"status"`
+	Description       *string `json:"description"`
+	Reference         *string `json:"reference"`
 }
 
 func (r *RecurringPaymentInput) Validate() string {
@@ -64,7 +65,7 @@ func (r *RecurringPaymentInput) Validate() string {
 		return "frequency must be one of: daily, weekly, monthly, quarterly, yearly"
 	}
 	if r.Interval <= 0 {
-		r.Interval = 1
+		return "interval must be greater than 0"
 	}
 	if r.StartDate == "" {
 		return "start_date is required"
