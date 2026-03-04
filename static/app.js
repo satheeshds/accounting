@@ -86,6 +86,7 @@ async function renderSection(section, params) {
             case 'transactions': await renderTransactions(params); break;
             case 'accounts': await renderAccounts(params); break;
             case 'contacts': await renderContacts(params); break;
+            case 'recurring-payments': await renderRecurringPayments(params); break;
             default: el().innerHTML = '<div class="empty-state"><p>Section not found</p></div>';
         }
     } catch (err) {
@@ -1040,6 +1041,195 @@ async function unlinkTransaction(txnId, linkId) {
     if (!confirm('Remove this link?')) return;
     await api(`/transactions/${txnId}/links/${linkId}`, { method: 'DELETE' });
     showTransactionLinks(txnId);
+}
+
+// ===== Recurring Payments =====
+async function renderRecurringPayments(params) {
+    const status = params?.get('status') || '';
+    const type = params?.get('type') || '';
+    let url = '/recurring-payments?';
+    if (status) url += 'status=' + encodeURIComponent(status) + '&';
+    if (type) url += 'type=' + encodeURIComponent(type);
+
+    const [payments, accounts, contacts] = await Promise.all([
+        api(url),
+        api('/accounts'),
+        api('/contacts'),
+    ]);
+    window._recurringAccounts = accounts;
+    window._recurringContacts = contacts;
+
+    el().innerHTML = `
+        <div class="section-header">
+            <h1>Recurring Payments</h1>
+            <div style="display:flex;gap:0.5rem">
+                <select class="form-control" onchange="navigate('recurring-payments', {status:this.value, type:'${type}'})">
+                    <option value="">— All Statuses —</option>
+                    ${['active', 'paused', 'cancelled', 'completed'].map(s => `<option value="${s}" ${status === s ? 'selected' : ''}>${s.charAt(0).toUpperCase() + s.slice(1)}</option>`).join('')}
+                </select>
+                <select class="form-control" onchange="navigate('recurring-payments', {status:'${status}', type:this.value})">
+                    <option value="">— All Types —</option>
+                    <option value="income" ${type === 'income' ? 'selected' : ''}>Income</option>
+                    <option value="expense" ${type === 'expense' ? 'selected' : ''}>Expense</option>
+                </select>
+                <button class="btn btn-primary" onclick="showRecurringPaymentForm()">+ New</button>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Name</th><th>Type</th><th>Amount</th><th>Frequency</th><th>Account</th><th>Contact</th><th>Next Due</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                    ${payments.length === 0 ? '<tr><td colspan="9" class="empty-state">No recurring payments found</td></tr>' :
+            payments.map(p => `<tr>
+                        <td>
+                            <strong>${p.name}</strong>
+                            ${p.description ? `<br><small style="color:var(--text-muted)">${p.description}</small>` : ''}
+                        </td>
+                        <td><span class="badge badge-${p.type}">${p.type}</span></td>
+                        <td class="money ${p.type === 'income' ? 'money-income' : 'money-expense'}">${formatMoney(p.amount)}</td>
+                        <td>${p.interval > 1 ? 'Every ' + p.interval + ' ' + p.frequency : p.frequency.charAt(0).toUpperCase() + p.frequency.slice(1)}</td>
+                        <td>${p.account_name || '—'}</td>
+                        <td>${p.contact_name || '—'}</td>
+                        <td>${p.next_due_date || '—'}</td>
+                        <td><span class="badge badge-${p.status}">${p.status}</span></td>
+                        <td class="actions-cell">
+                            <button class="btn btn-ghost btn-sm" onclick="showRecurringPaymentForm(${p.id})">Edit</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteRecurringPayment(${p.id})">Delete</button>
+                        </td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+async function showRecurringPaymentForm(id) {
+    let data = {
+        name: '', type: 'expense', amount: 0, account_id: '', contact_id: null,
+        frequency: 'monthly', interval: 1, start_date: '', end_date: null,
+        next_due_date: null, status: 'active', description: null, reference: null,
+    };
+    if (id) data = await api(`/recurring-payments/${id}`);
+    const accounts = window._recurringAccounts || await api('/accounts');
+    const contacts = window._recurringContacts || await api('/contacts');
+
+    openModal(id ? 'Edit Recurring Payment' : 'New Recurring Payment', `
+        <form onsubmit="saveRecurringPayment(event, ${id || 'null'})">
+            <div class="form-group">
+                <label>Name</label>
+                <input class="form-control" name="name" value="${data.name}" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Type</label>
+                    <select class="form-control" name="type">
+                        <option value="expense" ${data.type === 'expense' ? 'selected' : ''}>Expense</option>
+                        <option value="income" ${data.type === 'income' ? 'selected' : ''}>Income</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Amount (₹)</label>
+                    <input class="form-control" name="amount" type="number" step="0.01" value="${toRupees(data.amount)}" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Account</label>
+                    <select class="form-control" name="account_id" required>
+                        <option value="">Select account</option>
+                        ${accounts.map(a => `<option value="${a.id}" ${data.account_id == a.id ? 'selected' : ''}>${a.name}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Contact (optional)</label>
+                    <select class="form-control" name="contact_id">
+                        <option value="">— None —</option>
+                        ${contacts.map(c => `<option value="${c.id}" ${data.contact_id == c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Frequency</label>
+                    <select class="form-control" name="frequency">
+                        ${['daily', 'weekly', 'monthly', 'quarterly', 'yearly'].map(f => `<option value="${f}" ${data.frequency === f ? 'selected' : ''}>${f.charAt(0).toUpperCase() + f.slice(1)}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Interval (every N)</label>
+                    <input class="form-control" name="interval" type="number" min="1" value="${data.interval || 1}" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input class="form-control" name="start_date" type="date" value="${data.start_date || ''}" required>
+                </div>
+                <div class="form-group">
+                    <label>End Date (optional)</label>
+                    <input class="form-control" name="end_date" type="date" value="${data.end_date || ''}">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Next Due Date (optional)</label>
+                    <input class="form-control" name="next_due_date" type="date" value="${data.next_due_date || ''}">
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select class="form-control" name="status">
+                        ${['active', 'paused', 'cancelled', 'completed'].map(s => `<option value="${s}" ${data.status === s ? 'selected' : ''}>${s.charAt(0).toUpperCase() + s.slice(1)}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Description (optional)</label>
+                <input class="form-control" name="description" value="${data.description || ''}">
+            </div>
+            <div class="form-group">
+                <label>Reference (optional)</label>
+                <input class="form-control" name="reference" value="${data.reference || ''}">
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">${id ? 'Update' : 'Create'}</button>
+            </div>
+        </form>
+    `);
+}
+
+async function saveRecurringPayment(e, id) {
+    e.preventDefault();
+    const f = e.target;
+    const body = JSON.stringify({
+        name: f.name.value,
+        type: f.type.value,
+        amount: toPaise(f.amount.value),
+        account_id: parseInt(f.account_id.value),
+        contact_id: f.contact_id.value ? parseInt(f.contact_id.value) : null,
+        frequency: f.frequency.value,
+        interval: parseInt(f.interval.value),
+        start_date: f.start_date.value,
+        end_date: f.end_date.value || null,
+        next_due_date: f.next_due_date.value || null,
+        status: f.status.value,
+        description: f.description.value || null,
+        reference: f.reference.value || null,
+    });
+    try {
+        if (id) await api(`/recurring-payments/${id}`, { method: 'PUT', body });
+        else await api('/recurring-payments', { method: 'POST', body });
+        closeModal();
+        renderRecurringPayments();
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+async function deleteRecurringPayment(id) {
+    if (!confirm('Delete this recurring payment?')) return;
+    await api(`/recurring-payments/${id}`, { method: 'DELETE' });
+    renderRecurringPayments();
 }
 
 // ===== Init =====
