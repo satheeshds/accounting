@@ -778,6 +778,141 @@ func suggestTransactionsForDocument(txnType, docType string, docID int, docUnall
 	return suggestions
 }
 
+// SuggestTransactionsForRecurringPayment returns ranked bank transaction suggestions for a recurring payment.
+// @Summary      Suggest transactions for a recurring payment
+// @Description  Returns a ranked list of bank transactions that could correspond to a recurring payment occurrence, scored by amount (±2% tolerance), date proximity to next_due_date, and description/reference similarity. These are informational hints only (linkable=false) since recurring payments are not formally linked via transaction_documents.
+// @Tags         recurring_payments
+// @Produce      json
+// @Param        id   path      int  true  "Recurring Payment ID"
+// @Success      200  {object}  Response{data=[]TransactionSuggestion}
+// @Failure      404  {object}  Response{error=string}
+// @Router       /recurring-payments/{id}/match-suggestions [get]
+// @Security     BasicAuth
+func SuggestTransactionsForRecurringPayment(w http.ResponseWriter, r *http.Request) {
+	rpID, _ := strconv.Atoi(chi.URLParam(r, "id"))
+
+	if DB == nil {
+		writeJSON(w, http.StatusOK, []TransactionSuggestion{})
+		return
+	}
+
+	var rpAmount models.Money
+	var rpType, name, desc, ref string
+	var nextDueDate *string
+	err := DB.QueryRow(`
+		SELECT r.amount, r.type, r.name, COALESCE(r.description, ''), COALESCE(r.reference, ''), r.next_due_date
+		FROM recurring_payments r
+		WHERE r.id = ?`, rpID).Scan(&rpAmount, &rpType, &name, &desc, &ref, &nextDueDate)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "recurring payment not found")
+		return
+	}
+
+	docDate := ""
+	if nextDueDate != nil {
+		docDate = *nextDueDate
+	}
+
+	// Query matching transactions by type; no exclusion via transaction_documents
+	// since recurring payments are not formally linked to transactions.
+	rows, err := DB.Query(`
+		SELECT t.id, t.amount, t.transaction_date, COALESCE(t.description, ''), COALESCE(t.reference, ''),
+			COALESCE((SELECT SUM(td.amount) FROM transaction_documents td WHERE td.transaction_id = t.id), 0)
+		FROM transactions t
+		WHERE t.type = ?
+	`, rpType)
+	if err != nil {
+		writeJSON(w, http.StatusOK, []TransactionSuggestion{})
+		return
+	}
+	defer rows.Close()
+
+	var docDate_ time.Time
+	if docDate != "" {
+		docDate_, _ = time.Parse("2006-01-02", docDate)
+	}
+
+	// ±2% tolerance on the recurring payment amount
+	tolerance := models.Money(int64(rpAmount) * 2 / 100)
+
+	var suggestions []TransactionSuggestion
+	for rows.Next() {
+		var id int
+		var txnAmt, txnAllocated models.Money
+		var txnDatePtr *string
+		var txnDesc, txnRef string
+		if err := rows.Scan(&id, &txnAmt, &txnDatePtr, &txnDesc, &txnRef, &txnAllocated); err != nil {
+			continue
+		}
+
+		// Apply ±2% amount tolerance (same as forward direction for recurring payments)
+		diff := int64(txnAmt) - int64(rpAmount)
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff > int64(tolerance) {
+			continue
+		}
+
+		txnDateStr := ""
+		if txnDatePtr != nil {
+			txnDateStr = *txnDatePtr
+		}
+
+		var confidence float64
+		var reasons []string
+
+		if txnAmt == rpAmount {
+			confidence += 0.5
+			reasons = append(reasons, "exact_amount_match")
+		} else {
+			confidence += 0.3
+			reasons = append(reasons, "approximate_amount_match")
+		}
+
+		// Date proximity to next_due_date (7-day window, same as forward direction)
+		if !docDate_.IsZero() && txnDateStr != "" {
+			txnDate, err := time.Parse("2006-01-02", txnDateStr)
+			if err == nil {
+				diff := math.Abs(txnDate.Sub(docDate_).Hours() / 24)
+				if diff < 7 {
+					score := 0.3 * (1.0 - diff/7)
+					confidence += score
+					reasons = append(reasons, "date_proximity")
+				}
+			}
+		}
+
+		txnSearchText := strings.ToLower(txnDesc + " " + txnRef)
+		if ds, reason := matchDescScore(txnSearchText, ref, name+" "+desc); ds > 0 {
+			confidence += ds
+			reasons = append(reasons, reason)
+		}
+
+		txnUnallocated := models.Money(int64(txnAmt) - int64(txnAllocated))
+
+		suggestions = append(suggestions, TransactionSuggestion{
+			TransactionID:   id,
+			TransactionDate: txnDateStr,
+			Description:     txnDesc,
+			Reference:       txnRef,
+			Amount:          txnAmt,
+			Unallocated:     txnUnallocated,
+			Confidence:      math.Round(confidence*100) / 100,
+			MatchReasons:    reasons,
+			Linkable:        false, // recurring payments are not formally linked via transaction_documents
+		})
+	}
+
+	sort.Slice(suggestions, func(i, j int) bool {
+		return suggestions[i].Confidence > suggestions[j].Confidence
+	})
+	if suggestions == nil {
+		suggestions = []TransactionSuggestion{}
+	}
+	writeJSON(w, http.StatusOK, suggestions)
+}
+
 // derefDate returns the first non-empty date from the provided pointers.
 func derefDate(dates ...*string) string {
 	for _, d := range dates {
