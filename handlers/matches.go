@@ -104,27 +104,35 @@ func AutoMatch(w http.ResponseWriter, r *http.Request) {
 
 	suggestions := buildMatchSuggestions(txn.Type, txn.Unallocated, txnDate, txnSearchText)
 
-	// Only consider linkable suggestions for auto-matching
-	var linkable []MatchSuggestion
-	for _, s := range suggestions {
-		if s.Linkable {
-			linkable = append(linkable, s)
+	// Sort all suggestions by confidence descending so we can always return the best candidate.
+	sort.Slice(suggestions, func(i, j int) bool {
+		return suggestions[i].Confidence > suggestions[j].Confidence
+	})
+
+	// Identify the best overall suggestion (used in matched:false responses for manual review).
+	var bestOverall *MatchSuggestion
+	if len(suggestions) > 0 {
+		bestOverall = &suggestions[0]
+	}
+
+	// Only linkable suggestions can be auto-linked; find the best one.
+	var bestLinkable *MatchSuggestion
+	for i := range suggestions {
+		if suggestions[i].Linkable {
+			bestLinkable = &suggestions[i]
+			break
 		}
 	}
 
-	if len(linkable) == 0 {
-		writeJSON(w, http.StatusOK, AutoMatchResult{Matched: false})
+	if bestLinkable == nil {
+		// No linkable candidate — return the best informational suggestion so callers can prompt manually.
+		writeJSON(w, http.StatusOK, AutoMatchResult{Matched: false, Suggestion: bestOverall})
 		return
 	}
 
-	sort.Slice(linkable, func(i, j int) bool {
-		return linkable[i].Confidence > linkable[j].Confidence
-	})
-
-	best := linkable[0]
 	const autoMatchThreshold = 0.7
-	if best.Confidence < autoMatchThreshold {
-		writeJSON(w, http.StatusOK, AutoMatchResult{Matched: false, Suggestion: &best})
+	if bestLinkable.Confidence < autoMatchThreshold {
+		writeJSON(w, http.StatusOK, AutoMatchResult{Matched: false, Suggestion: bestLinkable})
 		return
 	}
 
@@ -132,13 +140,13 @@ func AutoMatch(w http.ResponseWriter, r *http.Request) {
 	linkAmount := txn.Unallocated
 	var linkID int
 	err = DB.QueryRow(`INSERT INTO transaction_documents (transaction_id, document_type, document_id, amount)
-		VALUES (?, ?, ?, ?) RETURNING id`, txnID, best.DocumentType, best.DocumentID, linkAmount).Scan(&linkID)
+		VALUES (?, ?, ?, ?) RETURNING id`, txnID, bestLinkable.DocumentType, bestLinkable.DocumentID, linkAmount).Scan(&linkID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	updateDocumentStatus(best.DocumentType, best.DocumentID)
+	updateDocumentStatus(bestLinkable.DocumentType, bestLinkable.DocumentID)
 
 	var td models.TransactionDocument
 	err = DB.QueryRow("SELECT id, transaction_id, document_type, document_id, amount, created_at FROM transaction_documents WHERE id = ?", linkID).
@@ -148,7 +156,7 @@ func AutoMatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, AutoMatchResult{Matched: true, Link: &td, Suggestion: &best})
+	writeJSON(w, http.StatusOK, AutoMatchResult{Matched: true, Link: &td, Suggestion: bestLinkable})
 }
 
 // buildMatchSearchText combines description and reference into a single lowercase search string.
