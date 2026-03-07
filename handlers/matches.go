@@ -721,15 +721,21 @@ func suggestTransactionsForDocument(txnType, docType string, docID int, docUnall
 	// Only consider transactions with remaining unallocated balance and not already linked to this document
 	rows, err := DB.Query(`
 		SELECT t.id, t.amount, t.transaction_date, COALESCE(t.description, ''), COALESCE(t.reference, ''),
-			COALESCE((SELECT SUM(td.amount) FROM transaction_documents td WHERE td.transaction_id = t.id), 0)
+			COALESCE(a.total_allocated, 0)
 		FROM transactions t
+		LEFT JOIN (
+			SELECT transaction_id, SUM(amount) AS total_allocated
+			FROM transaction_documents
+			GROUP BY transaction_id
+		) a ON a.transaction_id = t.id
 		WHERE t.type = ?
-		AND NOT EXISTS (
+		  AND t.amount > COALESCE(a.total_allocated, 0)
+		  AND NOT EXISTS (
 			SELECT 1 FROM transaction_documents td2
 			WHERE td2.transaction_id = t.id
-			AND td2.document_type = ?
-			AND td2.document_id = ?
-		)
+			  AND td2.document_type = ?
+			  AND td2.document_id = ?
+		  )
 	`, txnType, docType, docID)
 	if err != nil {
 		return nil
