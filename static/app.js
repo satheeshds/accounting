@@ -228,7 +228,7 @@ async function saveAccount(e, id) {
     const body = JSON.stringify({
         name: form.name.value,
         type: form.type.value,
-        opening_balance: toPaise(form.opening_balance.value),
+        opening_balance: parseFloat(form.opening_balance.value || 0),
     });
     if (id) {
         await api(`/accounts/${id}`, { method: 'PUT', body });
@@ -482,7 +482,7 @@ async function saveBill(e, id) {
         contact_id: f.contact_id.value ? parseInt(f.contact_id.value) : null,
         issue_date: f.issue_date.value || null,
         due_date: f.due_date.value || null,
-        amount: toPaise(f.amount.value),
+        amount: parseFloat(f.amount.value || 0),
         status: f.status.value,
         file_url: f.file_url.value || null,
         notes: f.notes.value || null,
@@ -612,7 +612,7 @@ async function saveInvoice(e, id) {
         contact_id: f.contact_id.value ? parseInt(f.contact_id.value) : null,
         issue_date: f.issue_date.value || null,
         due_date: f.due_date.value || null,
-        amount: toPaise(f.amount.value),
+        amount: parseFloat(f.amount.value || 0),
         status: f.status.value,
         file_url: f.file_url.value || null,
         notes: f.notes.value || null,
@@ -774,12 +774,12 @@ async function savePayout(e, id) {
         period_end: f.period_end.value || null,
         settlement_date: f.settlement_date.value || null,
         total_orders: parseInt(f.total_orders.value || 0),
-        gross_sales_amt: toPaise(f.gross_sales_amt.value),
-        restaurant_discount_amt: toPaise(f.restaurant_discount_amt.value),
-        platform_commission_amt: toPaise(f.platform_commission_amt.value),
-        taxes_tcs_tds_amt: toPaise(f.taxes_tcs_tds_amt.value),
-        marketing_ads_amt: toPaise(f.marketing_ads_amt.value),
-        final_payout_amt: toPaise(f.final_payout_amt.value),
+        gross_sales_amt: parseFloat(f.gross_sales_amt.value || 0),
+        restaurant_discount_amt: parseFloat(f.restaurant_discount_amt.value || 0),
+        platform_commission_amt: parseFloat(f.platform_commission_amt.value || 0),
+        taxes_tcs_tds_amt: parseFloat(f.taxes_tcs_tds_amt.value || 0),
+        marketing_ads_amt: parseFloat(f.marketing_ads_amt.value || 0),
+        final_payout_amt: parseFloat(f.final_payout_amt.value || 0),
         utr_number: f.utr_number.value || '',
     });
     if (id) await api(`/payouts/${id}`, { method: 'PUT', body });
@@ -920,7 +920,7 @@ async function saveTransaction(e, id) {
     const body = JSON.stringify({
         account_id: parseInt(f.account_id.value),
         type: f.type.value,
-        amount: toPaise(f.amount.value),
+        amount: parseFloat(f.amount.value || 0),
         transaction_date: f.transaction_date.value || null,
         description: f.description.value || null,
         reference: f.reference.value || null,
@@ -1038,7 +1038,7 @@ async function linkTransaction(e, txnId) {
             body: JSON.stringify({
                 document_type: f.document_type.value,
                 document_id: parseInt(f.document_id.value),
-                amount: toPaise(f.amount.value),
+                amount: parseFloat(f.amount.value || 0),
             }),
         });
         showTransactionLinks(txnId);
@@ -1221,7 +1221,7 @@ async function saveRecurringPayment(e, id) {
     const body = JSON.stringify({
         name: f.name.value,
         type: f.type.value,
-        amount: toPaise(f.amount.value),
+        amount: parseFloat(f.amount.value || 0),
         account_id: parseInt(f.account_id.value),
         contact_id: f.contact_id.value ? parseInt(f.contact_id.value) : null,
         frequency: f.frequency.value,
