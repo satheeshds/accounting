@@ -225,10 +225,17 @@ func suggestBills(amount models.Money, txnDate time.Time, txnSearchText string) 
 	rows, err := DB.Query(`
 		SELECT b.id, COALESCE(b.bill_number, ''), b.due_date, b.issue_date,
 			b.amount, COALESCE(b.notes, ''), COALESCE(c.name, ''),
-			COALESCE((SELECT SUM(td.amount) FROM transaction_documents td WHERE td.document_type = 'bill' AND td.document_id = b.id), 0)
+			COALESCE(a.total_allocated, 0)
 		FROM bills b
 		LEFT JOIN contacts c ON b.contact_id = c.id
+		LEFT JOIN (
+			SELECT document_id, SUM(amount) AS total_allocated
+			FROM transaction_documents
+			WHERE document_type = 'bill'
+			GROUP BY document_id
+		) a ON a.document_id = b.id
 		WHERE b.status NOT IN ('paid', 'cancelled')
+		  AND b.amount > COALESCE(a.total_allocated, 0)
 	`)
 	if err != nil {
 		return nil
