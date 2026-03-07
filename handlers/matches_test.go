@@ -219,10 +219,14 @@ func TestBuildMatchSuggestionsRouting(t *testing.T) {
 
 	txnDate, _ := time.Parse("2006-01-02", "2024-01-15")
 
-	// These will fail DB queries gracefully (nil DB) and return nil slices
-	result := buildMatchSuggestions("expense", 10000, txnDate, "test payment")
-	_ = result
+	// These will fail DB queries gracefully (nil DB) and should return empty slices.
+	expenseSuggestions := buildMatchSuggestions("expense", 10000, txnDate, "test payment")
+	if len(expenseSuggestions) != 0 {
+		t.Errorf("buildMatchSuggestions(\"expense\") returned %d suggestions, want 0 in nil-DB case", len(expenseSuggestions))
+	}
 
-	result = buildMatchSuggestions("income", 10000, txnDate, "test payment")
-	_ = result
+	incomeSuggestions := buildMatchSuggestions("income", 10000, txnDate, "test payment")
+	if len(incomeSuggestions) != 0 {
+		t.Errorf("buildMatchSuggestions(\"income\") returned %d suggestions, want 0 in nil-DB case", len(incomeSuggestions))
+	}
 }
