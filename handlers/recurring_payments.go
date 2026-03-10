@@ -235,3 +235,51 @@ func DeleteRecurringPayment(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "deleted"})
 }
+
+// GetRecurringPaymentLinks retrieves all transactions linked to a recurring payment
+// @Summary      Get recurring payment links
+// @Description  Get all payment transactions linked to a specific recurring payment.
+// @Tags         recurring_payments
+// @Produce      json
+// @Param        id   path      int  true  "Recurring Payment ID"
+// @Success      200  {object}  Response{data=[]RecurringPaymentLink}
+// @Router       /recurring-payments/{id}/links [get]
+// @Security     BasicAuth
+func GetRecurringPaymentLinks(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
+	rows, err := DB.Query(`SELECT td.id, td.transaction_id, td.document_type, td.document_id, td.amount, td.created_at,
+		COALESCE(t.transaction_date, ''), COALESCE(t.description, ''), COALESCE(t.reference, ''), a.name as account_name
+		FROM transaction_documents td
+		JOIN transactions t ON td.transaction_id = t.id
+		JOIN accounts a ON t.account_id = a.id
+		WHERE td.document_type = 'recurring_payment' AND td.document_id = ?`, id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer rows.Close()
+
+	var links []RecurringPaymentLink
+	for rows.Next() {
+		var l RecurringPaymentLink
+		if err := rows.Scan(&l.ID, &l.TransactionID, &l.DocumentType, &l.DocumentID, &l.Amount, &l.CreatedAt,
+			&l.TransactionDate, &l.Description, &l.Reference, &l.AccountName); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		links = append(links, l)
+	}
+	if links == nil {
+		links = []RecurringPaymentLink{}
+	}
+	writeJSON(w, http.StatusOK, links)
+}
+
+// RecurringPaymentLink represents a linked transaction payment for a recurring payment.
+type RecurringPaymentLink struct {
+	models.TransactionDocument
+	TransactionDate string `json:"transaction_date"`
+	Description     string `json:"description"`
+	Reference       string `json:"reference"`
+	AccountName     string `json:"account_name"`
+}

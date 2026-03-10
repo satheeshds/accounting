@@ -125,6 +125,7 @@ func main() {
 		r.Get("/recurring-payments/{id}", handlers.GetRecurringPayment)
 		r.Put("/recurring-payments/{id}", handlers.UpdateRecurringPayment)
 		r.Delete("/recurring-payments/{id}", handlers.DeleteRecurringPayment)
+		r.Get("/recurring-payments/{id}/links", handlers.GetRecurringPaymentLinks)
 		r.Get("/recurring-payments/{id}/match-suggestions", handlers.SuggestTransactionsForRecurringPayment)
 
 		// Dashboard

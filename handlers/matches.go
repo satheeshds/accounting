@@ -472,8 +472,9 @@ func suggestPayouts(amount models.Money, txnDate time.Time, txnSearchText string
 	return suggestions
 }
 
-// suggestRecurringPayments returns informational match suggestions from active recurring payments.
-// These are not directly linkable via transaction_documents and serve as hints only.
+// suggestRecurringPayments returns match suggestions from active recurring payments.
+// Each suggestion is linkable: recurring payments can be linked to multiple transactions
+// (one per occurrence) via transaction_documents.
 func suggestRecurringPayments(txnType string, amount models.Money, txnDate time.Time, txnSearchText string) []MatchSuggestion {
 	if DB == nil {
 		return nil
@@ -539,10 +540,12 @@ func suggestRecurringPayments(txnType string, amount models.Money, txnDate time.
 			DocumentRef:  name,
 			DocumentDate: docDate,
 			Amount:       rpAmount,
-			Unallocated:  0,
-			Confidence:   math.Round(confidence*100) / 100,
+			// Recurring payments can be linked to multiple transactions (one per occurrence),
+			// so the full amount is always available for each new link.
+			Unallocated: rpAmount,
+			Confidence:  math.Round(confidence*100) / 100,
 			MatchReasons: reasons,
-			Linkable:     false,
+			Linkable:     true,
 		})
 	}
 	return suggestions
@@ -819,7 +822,7 @@ func suggestTransactionsForDocument(txnType, docType string, docID int, docUnall
 
 // SuggestTransactionsForRecurringPayment returns ranked bank transaction suggestions for a recurring payment.
 // @Summary      Suggest transactions for a recurring payment
-// @Description  Returns a ranked list of bank transactions that could correspond to a recurring payment occurrence, scored by amount (±2% tolerance), date proximity to next_due_date, and description/reference similarity. These are informational hints only (linkable=false) since recurring payments are not formally linked via transaction_documents.
+// @Description  Returns a ranked list of bank transactions that could correspond to a recurring payment occurrence, scored by amount (±2% tolerance), date proximity to next_due_date, and description/reference similarity. Excludes transactions already linked to this recurring payment.
 // @Tags         recurring_payments
 // @Produce      json
 // @Param        id   path      int  true  "Recurring Payment ID"
@@ -852,14 +855,19 @@ func SuggestTransactionsForRecurringPayment(w http.ResponseWriter, r *http.Reque
 		docDate = *nextDueDate
 	}
 
-	// Query matching transactions by type; no exclusion via transaction_documents
-	// since recurring payments are not formally linked to transactions.
+	// Query matching transactions by type, excluding those already linked to this recurring payment
 	rows, err := DB.Query(`
 		SELECT t.id, t.amount, t.transaction_date, COALESCE(t.description, ''), COALESCE(t.reference, ''),
 			COALESCE((SELECT SUM(td.amount) FROM transaction_documents td WHERE td.transaction_id = t.id), 0)
 		FROM transactions t
 		WHERE t.type = ?
-	`, rpType)
+		  AND NOT EXISTS (
+			SELECT 1 FROM transaction_documents td2
+			WHERE td2.transaction_id = t.id
+			  AND td2.document_type = 'recurring_payment'
+			  AND td2.document_id = ?
+		  )
+	`, rpType, rpID)
 	if err != nil {
 		writeJSON(w, http.StatusOK, []TransactionSuggestion{})
 		return
@@ -939,7 +947,7 @@ func SuggestTransactionsForRecurringPayment(w http.ResponseWriter, r *http.Reque
 			Unallocated:     txnUnallocated,
 			Confidence:      math.Round(confidence*100) / 100,
 			MatchReasons:    reasons,
-			Linkable:        false, // recurring payments are not formally linked via transaction_documents
+			Linkable:        txnUnallocated > 0,
 		})
 	}
 

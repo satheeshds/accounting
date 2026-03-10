@@ -98,11 +98,11 @@ var migrations = []string{
 		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`,
 
-	// Junction table: many-to-many transaction <-> bill/invoice/payout
+	// Junction table: many-to-many transaction <-> bill/invoice/payout/recurring_payment
 	`CREATE TABLE IF NOT EXISTS transaction_documents (
 		id INTEGER PRIMARY KEY DEFAULT nextval('transaction_documents_id_seq'),
 		transaction_id INTEGER NOT NULL,
-		document_type TEXT NOT NULL CHECK(document_type IN ('bill', 'invoice', 'payout')),
+		document_type TEXT NOT NULL CHECK(document_type IN ('bill', 'invoice', 'payout', 'recurring_payment')),
 		document_id INTEGER NOT NULL,
 		amount INTEGER NOT NULL CHECK(amount > 0),
 		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -162,4 +162,22 @@ var migrations = []string{
 	`CREATE INDEX IF NOT EXISTS idx_recurring_payments_account ON recurring_payments(account_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_recurring_payments_status ON recurring_payments(status)`,
 	`CREATE INDEX IF NOT EXISTS idx_recurring_payments_next_due ON recurring_payments(next_due_date)`,
+
+	// Migrate transaction_documents to allow 'recurring_payment' as a document_type.
+	// For fresh installs the CREATE TABLE above already has the updated constraint.
+	// For existing databases the old CHECK constraint only allows 'bill'/'invoice'/'payout', so we
+	// recreate the table with the expanded constraint using a rename approach that is safe to run
+	// multiple times (CREATE IF NOT EXISTS + INSERT ON CONFLICT DO NOTHING).
+	`CREATE TABLE IF NOT EXISTS transaction_documents_v2 (
+		id INTEGER PRIMARY KEY DEFAULT nextval('transaction_documents_id_seq'),
+		transaction_id INTEGER NOT NULL,
+		document_type TEXT NOT NULL CHECK(document_type IN ('bill', 'invoice', 'payout', 'recurring_payment')),
+		document_id INTEGER NOT NULL,
+		amount INTEGER NOT NULL CHECK(amount > 0),
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`,
+	`INSERT INTO transaction_documents_v2 SELECT * FROM transaction_documents ON CONFLICT (id) DO NOTHING`,
+	`ALTER TABLE transaction_documents RENAME TO transaction_documents_bak`,
+	`ALTER TABLE transaction_documents_v2 RENAME TO transaction_documents`,
+	`DROP TABLE IF EXISTS transaction_documents_bak`,
 }

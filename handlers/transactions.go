@@ -358,6 +358,7 @@ func CreateTransactionLink(w http.ResponseWriter, r *http.Request) {
 	// Check document exists and get its amount
 	var docAmount models.Money
 	var docTable, amountField string
+	var checkDocUnallocated = true
 	switch input.DocumentType {
 	case "bill":
 		docTable = "bills"
@@ -368,6 +369,12 @@ func CreateTransactionLink(w http.ResponseWriter, r *http.Request) {
 	case "payout":
 		docTable = "payouts"
 		amountField = "final_payout_amt"
+	case "recurring_payment":
+		// Recurring payments recur over time, so multiple transactions may be linked to the
+		// same recurring payment (one per occurrence). Skip the per-document unallocated check.
+		docTable = "recurring_payments"
+		amountField = "amount"
+		checkDocUnallocated = false
 	default:
 		writeError(w, http.StatusBadRequest, "invalid document type")
 		return
@@ -378,14 +385,16 @@ func CreateTransactionLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check document unallocated balance
-	var docAllocated models.Money
-	DB.QueryRow("SELECT COALESCE(SUM(amount), 0) FROM transaction_documents WHERE document_type = ? AND document_id = ?",
-		input.DocumentType, input.DocumentID).Scan(&docAllocated)
-	docUnallocated := models.Money(int64(docAmount) - int64(docAllocated))
-	if input.Amount > docUnallocated {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("%s only has %d paise unallocated (requested %d)", input.DocumentType, docUnallocated, input.Amount))
-		return
+	// Check document unallocated balance (skipped for recurring_payment — see above)
+	if checkDocUnallocated {
+		var docAllocated models.Money
+		DB.QueryRow("SELECT COALESCE(SUM(amount), 0) FROM transaction_documents WHERE document_type = ? AND document_id = ?",
+			input.DocumentType, input.DocumentID).Scan(&docAllocated)
+		docUnallocated := models.Money(int64(docAmount) - int64(docAllocated))
+		if input.Amount > docUnallocated {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("%s only has %d paise unallocated (requested %d)", input.DocumentType, docUnallocated, input.Amount))
+			return
+		}
 	}
 
 	// Create the link
@@ -457,6 +466,10 @@ func updateDocumentStatus(docType string, docID int) {
 		amountField = "amount"
 	case "payout":
 		// Payouts don't have a status field in the current schema
+		return
+	case "recurring_payment":
+		// Recurring payments use their own status lifecycle (active/paused/cancelled/completed)
+		// and are not updated based on transaction allocation
 		return
 	default:
 		return
