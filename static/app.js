@@ -661,7 +661,7 @@ async function renderPayouts(params) {
                 <tbody>
                     ${payouts.length === 0 ? '<tr><td colspan="10" class="empty-state">No payouts found</td></tr>' :
             payouts.map(p => `<tr>
-                        <td>${formatDate(p.settlement_date)}</td>
+                        <td>${esc(formatDate(p.settlement_date))}</td>
                         <td><span class="badge badge-${p.platform}">${p.platform}</span></td>
                         <td>${p.outlet_name}</td>
                         <td>${p.total_orders}</td>
