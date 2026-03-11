@@ -452,7 +452,7 @@ async function showDocumentLinks(type, id) {
     `);
 }
 
-async function linkDocumentToTransaction(docType, docId, txnId, amountPaise) {
+async function postTransactionLink(txnId, docType, docId, amountPaise, onSuccess) {
     try {
         await api(`/transactions/${txnId}/links`, {
             method: 'POST',
@@ -462,10 +462,14 @@ async function linkDocumentToTransaction(docType, docId, txnId, amountPaise) {
                 amount: amountPaise / 100,
             }),
         });
-        showDocumentLinks(docType, docId);
+        onSuccess();
     } catch (err) {
         alert('Error: ' + err.message);
     }
+}
+
+async function linkDocumentToTransaction(docType, docId, txnId, amountPaise) {
+    await postTransactionLink(txnId, docType, docId, amountPaise, () => showDocumentLinks(docType, docId));
 }
 
 async function showBillForm(id) {
@@ -1086,19 +1090,7 @@ async function showTransactionLinks(txnId) {
 }
 
 async function quickLinkTransaction(txnId, docType, docId, amountPaise) {
-    try {
-        await api(`/transactions/${txnId}/links`, {
-            method: 'POST',
-            body: JSON.stringify({
-                document_type: docType,
-                document_id: docId,
-                amount: amountPaise / 100,
-            }),
-        });
-        showTransactionLinks(txnId);
-    } catch (err) {
-        alert('Error: ' + err.message);
-    }
+    await postTransactionLink(txnId, docType, docId, amountPaise, () => showTransactionLinks(txnId));
 }
 
 function updateDocOptions(type) {
