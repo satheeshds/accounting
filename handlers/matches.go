@@ -472,17 +472,19 @@ func suggestPayouts(amount models.Money, txnDate time.Time, txnSearchText string
 	return suggestions
 }
 
-// suggestRecurringPayments returns match suggestions from active recurring payments.
-// Each suggestion is linkable: recurring payments can be linked to multiple transactions
-// (one per occurrence) via transaction_documents.
+// suggestRecurringPayments returns match suggestions from pending recurring_payment_occurrences.
+// Each suggestion has document_type="recurring_payment_occurrence" and document_id=occurrence.id
+// so that a link is created against the specific occurrence, marking it as paid.
 func suggestRecurringPayments(txnType string, amount models.Money, txnDate time.Time, txnSearchText string) []MatchSuggestion {
 	if DB == nil {
 		return nil
 	}
 	rows, err := DB.Query(`
-		SELECT r.id, r.name, r.next_due_date, r.amount, COALESCE(r.description, ''), COALESCE(r.reference, '')
-		FROM recurring_payments r
-		WHERE r.status = 'active' AND r.type = ?
+		SELECT o.id, o.due_date, o.amount,
+			r.name, COALESCE(r.description, ''), COALESCE(r.reference, '')
+		FROM recurring_payment_occurrences o
+		JOIN recurring_payments r ON o.recurring_payment_id = r.id
+		WHERE o.status = 'pending' AND r.status = 'active' AND r.type = ?
 	`, txnType)
 	if err != nil {
 		return nil
@@ -491,17 +493,17 @@ func suggestRecurringPayments(txnType string, amount models.Money, txnDate time.
 
 	var suggestions []MatchSuggestion
 	for rows.Next() {
-		var id int
+		var occID int
+		var dueDate string
+		var occAmount models.Money
 		var name, desc, ref string
-		var nextDueDate *string
-		var rpAmount models.Money
-		if err := rows.Scan(&id, &name, &nextDueDate, &rpAmount, &desc, &ref); err != nil {
+		if err := rows.Scan(&occID, &dueDate, &occAmount, &name, &desc, &ref); err != nil {
 			continue
 		}
 
 		// Allow a small tolerance of ±2% to accommodate minor variations (taxes, fees, rounding)
-		tolerance := models.Money(int64(rpAmount) * 2 / 100)
-		diff := int64(amount) - int64(rpAmount)
+		tolerance := models.Money(int64(occAmount) * 2 / 100)
+		diff := int64(amount) - int64(occAmount)
 		if diff < 0 {
 			diff = -diff
 		}
@@ -512,7 +514,7 @@ func suggestRecurringPayments(txnType string, amount models.Money, txnDate time.
 		var confidence float64
 		var reasons []string
 
-		if amount == rpAmount {
+		if amount == occAmount {
 			confidence += 0.5
 			reasons = append(reasons, "exact_amount_match")
 		} else {
@@ -520,11 +522,7 @@ func suggestRecurringPayments(txnType string, amount models.Money, txnDate time.
 			reasons = append(reasons, "approximate_amount_match")
 		}
 
-		docDate := ""
-		if nextDueDate != nil {
-			docDate = *nextDueDate
-		}
-		if ds, reason := matchDateScore(txnDate, docDate, 7); ds > 0 {
+		if ds, reason := matchDateScore(txnDate, dueDate, 7); ds > 0 {
 			confidence += ds
 			reasons = append(reasons, reason)
 		}
@@ -535,15 +533,13 @@ func suggestRecurringPayments(txnType string, amount models.Money, txnDate time.
 		}
 
 		suggestions = append(suggestions, MatchSuggestion{
-			DocumentType: "recurring_payment",
-			DocumentID:   id,
+			DocumentType: "recurring_payment_occurrence",
+			DocumentID:   occID,
 			DocumentRef:  name,
-			DocumentDate: docDate,
-			Amount:       rpAmount,
-			// Recurring payments can be linked to multiple transactions (one per occurrence),
-			// so the full amount is always available for each new link.
-			Unallocated: rpAmount,
-			Confidence:  math.Round(confidence*100) / 100,
+			DocumentDate: dueDate,
+			Amount:       occAmount,
+			Unallocated:  occAmount,
+			Confidence:   math.Round(confidence*100) / 100,
 			MatchReasons: reasons,
 			Linkable:     true,
 		})

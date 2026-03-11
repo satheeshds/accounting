@@ -12,7 +12,7 @@ type TransactionDocument struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-// TransactionDocumentInput is used for linking transactions to bills, invoices, payouts or recurring payments.
+// TransactionDocumentInput is used for linking transactions to bills, invoices, payouts or recurring payment occurrences.
 type TransactionDocumentInput struct {
 	DocumentType string `json:"document_type"`
 	DocumentID   int    `json:"document_id"`
@@ -21,9 +21,9 @@ type TransactionDocumentInput struct {
 
 func (td *TransactionDocumentInput) Validate() string {
 	switch td.DocumentType {
-	case "bill", "invoice", "payout", "recurring_payment":
+	case "bill", "invoice", "payout", "recurring_payment", "recurring_payment_occurrence":
 	default:
-		return "document_type must be one of: bill, invoice, payout or recurring_payment"
+		return "document_type must be one of: bill, invoice, payout, recurring_payment or recurring_payment_occurrence"
 	}
 	if td.DocumentID <= 0 {
 		return "document_id is required"

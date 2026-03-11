@@ -375,6 +375,10 @@ func CreateTransactionLink(w http.ResponseWriter, r *http.Request) {
 		docTable = "recurring_payments"
 		amountField = "amount"
 		checkDocUnallocated = false
+	case "recurring_payment_occurrence":
+		// Each occurrence represents a single period's payment — unallocated check applies.
+		docTable = "recurring_payment_occurrences"
+		amountField = "amount"
 	default:
 		writeError(w, http.StatusBadRequest, "invalid document type")
 		return
@@ -471,6 +475,11 @@ func updateDocumentStatus(docType string, docID int) {
 		// Recurring payments use their own status lifecycle (active/paused/cancelled/completed)
 		// and are not updated based on transaction allocation
 		return
+	case "recurring_payment_occurrence":
+		// Occurrences track their own paid/pending status based on allocation
+		table = "recurring_payment_occurrences"
+		fullStatus = "paid"
+		amountField = "amount"
 	default:
 		return
 	}
@@ -482,14 +491,22 @@ func updateDocumentStatus(docType string, docID int) {
 	}
 
 	var newStatus string
-	if total <= 0 {
-		newStatus = "draft"
-	} else if allocated <= 0 {
-		newStatus = "draft"
-	} else if allocated < total {
-		newStatus = "partial"
+	if docType == "recurring_payment_occurrence" {
+		// Occurrences only have pending/paid/skipped
+		if allocated >= total && total > 0 {
+			newStatus = "paid"
+		} else {
+			newStatus = "pending"
+		}
 	} else {
-		newStatus = fullStatus
+		// Bills and invoices use draft/partial/paid|received
+		if total <= 0 || allocated <= 0 {
+			newStatus = "draft"
+		} else if allocated < total {
+			newStatus = "partial"
+		} else {
+			newStatus = fullStatus
+		}
 	}
 
 	DB.Exec(fmt.Sprintf("UPDATE %s SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", table), newStatus, docID)
