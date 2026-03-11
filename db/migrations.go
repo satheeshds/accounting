@@ -99,11 +99,12 @@ var migrations = []string{
 		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`,
 
-	// Junction table: many-to-many transaction <-> bill/invoice/payout/recurring_payment_occurrence
+	// Junction table: many-to-many transaction <-> bill/invoice/payout/recurring_payment_occurrence.
+	// No CHECK constraint on document_type — valid types are enforced by the application layer.
 	`CREATE TABLE IF NOT EXISTS transaction_documents (
 		id INTEGER PRIMARY KEY DEFAULT nextval('transaction_documents_id_seq'),
 		transaction_id INTEGER NOT NULL,
-		document_type TEXT NOT NULL CHECK(document_type IN ('bill', 'invoice', 'payout', 'recurring_payment', 'recurring_payment_occurrence')),
+		document_type TEXT NOT NULL,
 		document_id INTEGER NOT NULL,
 		amount INTEGER NOT NULL CHECK(amount > 0),
 		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -164,16 +165,15 @@ var migrations = []string{
 	`CREATE INDEX IF NOT EXISTS idx_recurring_payments_status ON recurring_payments(status)`,
 	`CREATE INDEX IF NOT EXISTS idx_recurring_payments_next_due ON recurring_payments(next_due_date)`,
 
-	// Migrate transaction_documents to allow 'recurring_payment' and 'recurring_payment_occurrence'
-	// as a document_type. For fresh installs the CREATE TABLE above already has the updated
-	// constraint. For existing databases the old CHECK constraint only allows
-	// 'bill'/'invoice'/'payout', so we recreate the table with the expanded constraint using a
-	// rename approach that is safe to run multiple times
-	// (CREATE IF NOT EXISTS + INSERT ON CONFLICT DO NOTHING).
+	// One-time migration for existing databases: the original transaction_documents table had a
+	// CHECK constraint on document_type that only allowed 'bill'/'invoice'/'payout'. DuckDB does
+	// not support DROP CONSTRAINT, so we replace the table using the rename approach.
+	// The new table has no CHECK on document_type — application-layer validation handles this.
+	// This is idempotent: CREATE IF NOT EXISTS + INSERT ON CONFLICT DO NOTHING.
 	`CREATE TABLE IF NOT EXISTS transaction_documents_v2 (
 		id INTEGER PRIMARY KEY DEFAULT nextval('transaction_documents_id_seq'),
 		transaction_id INTEGER NOT NULL,
-		document_type TEXT NOT NULL CHECK(document_type IN ('bill', 'invoice', 'payout', 'recurring_payment', 'recurring_payment_occurrence')),
+		document_type TEXT NOT NULL,
 		document_id INTEGER NOT NULL,
 		amount INTEGER NOT NULL CHECK(amount > 0),
 		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
