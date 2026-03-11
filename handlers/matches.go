@@ -481,10 +481,15 @@ func suggestRecurringPayments(txnType string, amount models.Money, txnDate time.
 	}
 	rows, err := DB.Query(`
 		SELECT o.id, o.due_date, o.amount,
+			COALESCE(SUM(td.amount), 0) AS allocated,
 			r.name, COALESCE(r.description, ''), COALESCE(r.reference, '')
 		FROM recurring_payment_occurrences o
 		JOIN recurring_payments r ON o.recurring_payment_id = r.id
+		LEFT JOIN transaction_documents td
+			ON td.document_type = 'recurring_payment_occurrence' AND td.document_id = o.id
 		WHERE o.status = 'pending' AND r.status = 'active' AND r.type = ?
+		GROUP BY o.id, o.due_date, o.amount, r.name, r.description, r.reference
+		HAVING COALESCE(SUM(td.amount), 0) < o.amount
 	`, txnType)
 	if err != nil {
 		return nil
@@ -495,11 +500,12 @@ func suggestRecurringPayments(txnType string, amount models.Money, txnDate time.
 	for rows.Next() {
 		var occID int
 		var dueDate string
-		var occAmount models.Money
+		var occAmount, occAllocated models.Money
 		var name, desc, ref string
-		if err := rows.Scan(&occID, &dueDate, &occAmount, &name, &desc, &ref); err != nil {
+		if err := rows.Scan(&occID, &dueDate, &occAmount, &occAllocated, &name, &desc, &ref); err != nil {
 			continue
 		}
+		occUnallocated := models.Money(int64(occAmount) - int64(occAllocated))
 
 		// Allow a small tolerance of ±2% to accommodate minor variations (taxes, fees, rounding)
 		tolerance := models.Money(int64(occAmount) * 2 / 100)
@@ -538,10 +544,10 @@ func suggestRecurringPayments(txnType string, amount models.Money, txnDate time.
 			DocumentRef:  name,
 			DocumentDate: dueDate,
 			Amount:       occAmount,
-			Unallocated:  occAmount,
+			Unallocated:  occUnallocated,
 			Confidence:   math.Round(confidence*100) / 100,
 			MatchReasons: reasons,
-			Linkable:     true,
+			Linkable:     occUnallocated >= amount,
 		})
 	}
 	return suggestions
@@ -860,10 +866,16 @@ func SuggestTransactionsForRecurringPayment(w http.ResponseWriter, r *http.Reque
 		  AND NOT EXISTS (
 			SELECT 1 FROM transaction_documents td2
 			WHERE td2.transaction_id = t.id
-			  AND td2.document_type = 'recurring_payment'
-			  AND td2.document_id = ?
+			  AND (
+			  	(td2.document_type = 'recurring_payment' AND td2.document_id = ?)
+			  	OR
+			  	(td2.document_type = 'recurring_payment_occurrence' AND EXISTS (
+			  		SELECT 1 FROM recurring_payment_occurrences rpo
+			  		WHERE rpo.id = td2.document_id AND rpo.recurring_payment_id = ?
+			  	))
+			  )
 		  )
-	`, rpType, rpID)
+	`, rpType, rpID, rpID)
 	if err != nil {
 		writeJSON(w, http.StatusOK, []TransactionSuggestion{})
 		return

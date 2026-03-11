@@ -252,7 +252,10 @@ func GetRecurringPaymentLinks(w http.ResponseWriter, r *http.Request) {
 		FROM transaction_documents td
 		JOIN transactions t ON td.transaction_id = t.id
 		JOIN accounts a ON t.account_id = a.id
-		WHERE td.document_type = 'recurring_payment' AND td.document_id = ?`, id)
+		WHERE (td.document_type = 'recurring_payment' AND td.document_id = ?)
+		   OR (td.document_type = 'recurring_payment_occurrence' AND td.document_id IN (
+			    SELECT rpo.id FROM recurring_payment_occurrences rpo WHERE rpo.recurring_payment_id = ?
+		   ))`, id, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

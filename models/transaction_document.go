@@ -2,11 +2,11 @@ package models
 
 import "time"
 
-// TransactionDocument links a transaction to a bill, invoice, payout or recurring payment with an allocated amount.
+// TransactionDocument links a transaction to a bill, invoice, payout or recurring payment occurrence with an allocated amount.
 type TransactionDocument struct {
 	ID            int       `json:"id"`
 	TransactionID int       `json:"transaction_id"`
-	DocumentType  string    `json:"document_type"` // bill, invoice, payout or recurring_payment
+	DocumentType  string    `json:"document_type"` // bill, invoice, payout or recurring_payment_occurrence
 	DocumentID    int       `json:"document_id"`
 	Amount        Money     `json:"amount"`
 	CreatedAt     time.Time `json:"created_at"`
@@ -21,9 +21,9 @@ type TransactionDocumentInput struct {
 
 func (td *TransactionDocumentInput) Validate() string {
 	switch td.DocumentType {
-	case "bill", "invoice", "payout", "recurring_payment", "recurring_payment_occurrence":
+	case "bill", "invoice", "payout", "recurring_payment_occurrence":
 	default:
-		return "document_type must be one of: bill, invoice, payout, recurring_payment or recurring_payment_occurrence"
+		return "document_type must be one of: bill, invoice, payout or recurring_payment_occurrence"
 	}
 	if td.DocumentID <= 0 {
 		return "document_id is required"
