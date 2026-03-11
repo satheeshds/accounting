@@ -35,7 +35,7 @@ function formatDate(dateStr) {
 
 function confidenceBadgeHtml(c) {
     const pct = Math.round(c * 100);
-    const cls = pct >= 70 ? 'badge-paid' : (pct >= 40 ? 'badge-partial' : 'badge-cancelled');
+    const cls = c >= 0.7 ? 'badge-paid' : (c >= 0.4 ? 'badge-partial' : 'badge-cancelled');
     return `<span class="badge ${cls}">${pct}%</span>`;
 }
 
