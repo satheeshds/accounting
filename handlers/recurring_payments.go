@@ -236,9 +236,9 @@ func DeleteRecurringPayment(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "deleted"})
 }
 
-// GetRecurringPaymentLinks retrieves all transactions linked to a recurring payment
+// GetRecurringPaymentLinks retrieves all transactions linked to a recurring payment, with occurrence details
 // @Summary      Get recurring payment links
-// @Description  Get all payment transactions linked to a specific recurring payment.
+// @Description  Get all payment transactions linked to a specific recurring payment, including the due date and status of the occurrence each transaction covers.
 // @Tags         recurring_payments
 // @Produce      json
 // @Param        id   path      int  true  "Recurring Payment ID"
@@ -247,15 +247,17 @@ func DeleteRecurringPayment(w http.ResponseWriter, r *http.Request) {
 // @Security     BasicAuth
 func GetRecurringPaymentLinks(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
-	rows, err := DB.Query(`SELECT td.id, td.transaction_id, td.document_type, td.document_id, td.amount, td.created_at,
-		COALESCE(t.transaction_date, ''), COALESCE(t.description, ''), COALESCE(t.reference, ''), a.name as account_name
+	rows, err := DB.Query(`
+		SELECT td.id, td.transaction_id, td.document_type, td.document_id, td.amount, td.created_at,
+			COALESCE(t.transaction_date, ''), COALESCE(t.description, ''), COALESCE(t.reference, ''), a.name,
+			rpo.due_date, rpo.status
 		FROM transaction_documents td
 		JOIN transactions t ON td.transaction_id = t.id
 		JOIN accounts a ON t.account_id = a.id
-		WHERE (td.document_type = 'recurring_payment' AND td.document_id = ?)
-		   OR (td.document_type = 'recurring_payment_occurrence' AND td.document_id IN (
-			    SELECT rpo.id FROM recurring_payment_occurrences rpo WHERE rpo.recurring_payment_id = ?
-		   ))`, id, id)
+		JOIN recurring_payment_occurrences rpo
+			ON td.document_type = 'recurring_payment_occurrence' AND td.document_id = rpo.id
+		WHERE rpo.recurring_payment_id = ?
+		ORDER BY rpo.due_date DESC`, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -266,7 +268,8 @@ func GetRecurringPaymentLinks(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var l RecurringPaymentLink
 		if err := rows.Scan(&l.ID, &l.TransactionID, &l.DocumentType, &l.DocumentID, &l.Amount, &l.CreatedAt,
-			&l.TransactionDate, &l.Description, &l.Reference, &l.AccountName); err != nil {
+			&l.TransactionDate, &l.Description, &l.Reference, &l.AccountName,
+			&l.OccurrenceDueDate, &l.OccurrenceStatus); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -278,13 +281,15 @@ func GetRecurringPaymentLinks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, links)
 }
 
-// RecurringPaymentLink represents a linked transaction payment for a recurring payment.
+// RecurringPaymentLink represents a linked transaction payment for a recurring payment, at the occurrence level.
 type RecurringPaymentLink struct {
 	models.TransactionDocument
-	TransactionDate string `json:"transaction_date"`
-	Description     string `json:"description"`
-	Reference       string `json:"reference"`
-	AccountName     string `json:"account_name"`
+	TransactionDate   string `json:"transaction_date"`
+	Description       string `json:"description"`
+	Reference         string `json:"reference"`
+	AccountName       string `json:"account_name"`
+	OccurrenceDueDate string `json:"occurrence_due_date"` // the billing period this transaction covers
+	OccurrenceStatus  string `json:"occurrence_status"`  // pending, paid, or skipped
 }
 
 // GetRecurringPaymentOccurrences lists all auto-generated occurrences for a recurring payment.
