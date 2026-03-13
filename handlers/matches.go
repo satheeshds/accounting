@@ -866,16 +866,13 @@ func SuggestTransactionsForRecurringPayment(w http.ResponseWriter, r *http.Reque
 		  AND NOT EXISTS (
 			SELECT 1 FROM transaction_documents td2
 			WHERE td2.transaction_id = t.id
-			  AND (
-			  	(td2.document_type = 'recurring_payment' AND td2.document_id = ?)
-			  	OR
-			  	(td2.document_type = 'recurring_payment_occurrence' AND EXISTS (
-			  		SELECT 1 FROM recurring_payment_occurrences rpo
-			  		WHERE rpo.id = td2.document_id AND rpo.recurring_payment_id = ?
-			  	))
+			  AND td2.document_type = 'recurring_payment_occurrence'
+			  AND EXISTS (
+			  	SELECT 1 FROM recurring_payment_occurrences rpo
+			  	WHERE rpo.id = td2.document_id AND rpo.recurring_payment_id = ?
 			  )
 		  )
-	`, rpType, rpID, rpID)
+	`, rpType, rpID)
 	if err != nil {
 		writeJSON(w, http.StatusOK, []TransactionSuggestion{})
 		return
