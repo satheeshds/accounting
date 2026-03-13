@@ -3039,7 +3039,7 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "localhost:8080",
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
-	Title:            "Accounting Software API",
+	Title:            "Portal API",
 	Description:      "API for managing accounts, contacts, bills, invoices, and transactions.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
