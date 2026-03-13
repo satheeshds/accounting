@@ -83,9 +83,12 @@ func GenerateOccurrences(database *sql.DB) error {
 		}
 
 		if completed {
-			database.Exec(`UPDATE recurring_payments SET status = 'completed', next_due_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-				nextDue.Format("2006-01-02"), rp.id)
-			slog.Info("recurring payment completed", "recurring_payment_id", rp.id)
+			if _, err := database.Exec(`UPDATE recurring_payments SET status = 'completed', next_due_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+				nextDue.Format("2006-01-02"), rp.id); err != nil {
+				slog.Error("failed to mark recurring payment completed", "recurring_payment_id", rp.id, "error", err)
+			} else {
+				slog.Info("recurring payment completed", "recurring_payment_id", rp.id)
+			}
 		} else {
 			if _, err := database.Exec(`UPDATE recurring_payments SET next_due_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 				nextDue.Format("2006-01-02"), rp.id); err != nil {
