@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -52,6 +53,27 @@ func main() {
 
 	// Set shared DB for handlers
 	handlers.DB = database
+
+	// Generate recurring payment occurrences for all due dates up to today.
+	// This also covers gap recovery: if the server was offline for weeks/months, all missed
+	// occurrences are created as "pending" so they can be reconciled with bank transactions.
+	if err := db.GenerateOccurrences(database); err != nil {
+		slog.Warn("occurrence generation failed on startup", "error", err)
+	}
+
+	// Daily background job: generate new occurrences as their due dates arrive.
+	// Runs once per day at approximately midnight so the server doesn't need to be restarted
+	// to pick up newly due occurrences.
+	go func() {
+		for {
+			now := time.Now()
+			next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+			time.Sleep(time.Until(next))
+			if err := db.GenerateOccurrences(database); err != nil {
+				slog.Warn("daily occurrence generation failed", "error", err)
+			}
+		}
+	}()
 
 	// Router setup
 	r := chi.NewRouter()
@@ -125,6 +147,8 @@ func main() {
 		r.Get("/recurring-payments/{id}", handlers.GetRecurringPayment)
 		r.Put("/recurring-payments/{id}", handlers.UpdateRecurringPayment)
 		r.Delete("/recurring-payments/{id}", handlers.DeleteRecurringPayment)
+		r.Get("/recurring-payments/{id}/links", handlers.GetRecurringPaymentLinks)
+		r.Get("/recurring-payments/{id}/occurrences", handlers.GetRecurringPaymentOccurrences)
 		r.Get("/recurring-payments/{id}/match-suggestions", handlers.SuggestTransactionsForRecurringPayment)
 
 		// Dashboard
