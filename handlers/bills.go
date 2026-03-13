@@ -219,7 +219,23 @@ func UpdateBill(w http.ResponseWriter, r *http.Request) {
 // @Security     BasicAuth
 func DeleteBill(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
-	res, err := DB.Exec("DELETE FROM bills WHERE id = ?", id)
+
+	tx, err := DB.Begin()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	// Remove all transaction links for this bill so transaction allocated amounts stay accurate.
+	if _, err := tx.Exec("DELETE FROM transaction_documents WHERE document_type = 'bill' AND document_id = ?", id); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	res, err := tx.Exec("DELETE FROM bills WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -228,6 +244,12 @@ func DeleteBill(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "bill not found")
 		return
 	}
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"message": "deleted"})
 }
 
