@@ -220,18 +220,43 @@ func UpdateInvoice(w http.ResponseWriter, r *http.Request) {
 func DeleteInvoice(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
 
-	// Remove all transaction links for this invoice so transaction allocated amounts stay accurate.
-	DB.Exec("DELETE FROM transaction_documents WHERE document_type = 'invoice' AND document_id = ?", id)
-
-	res, err := DB.Exec("DELETE FROM invoices WHERE id = ?", id)
+	tx, err := DB.Begin()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+
+	// Remove all transaction links for this invoice so transaction allocated amounts stay accurate.
+	if _, err := tx.Exec("DELETE FROM transaction_documents WHERE document_type = 'invoice' AND document_id = ?", id); err != nil {
+		_ = tx.Rollback()
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	res, err := tx.Exec("DELETE FROM invoices WHERE id = ?", id)
+	if err != nil {
+		_ = tx.Rollback()
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	n, err := res.RowsAffected()
+	if err != nil {
+		_ = tx.Rollback()
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if n == 0 {
+		_ = tx.Rollback()
 		writeError(w, http.StatusNotFound, "invoice not found")
 		return
 	}
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"message": "deleted"})
 }
 
