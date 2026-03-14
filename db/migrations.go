@@ -32,6 +32,8 @@ var migrations = []string{
 	"CREATE SEQUENCE IF NOT EXISTS payouts_id_seq",
 	"CREATE SEQUENCE IF NOT EXISTS recurring_payments_id_seq",
 	"CREATE SEQUENCE IF NOT EXISTS recurring_payment_occurrences_id_seq",
+	"CREATE SEQUENCE IF NOT EXISTS bill_items_id_seq",
+	"CREATE SEQUENCE IF NOT EXISTS invoice_items_id_seq",
 
 	// Accounts: bank, cash, credit card
 	`CREATE TABLE IF NOT EXISTS accounts (
@@ -180,4 +182,30 @@ var migrations = []string{
 	`CREATE INDEX IF NOT EXISTS idx_recurring_payment_occurrences_rp ON recurring_payment_occurrences(recurring_payment_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_recurring_payment_occurrences_status ON recurring_payment_occurrences(status)`,
 	`CREATE INDEX IF NOT EXISTS idx_recurring_payment_occurrences_due_date ON recurring_payment_occurrences(due_date)`,
+
+	// Bill items: individual line items for a bill
+	`CREATE TABLE IF NOT EXISTS bill_items (
+		id INTEGER PRIMARY KEY DEFAULT nextval('bill_items_id_seq'),
+		bill_id INTEGER NOT NULL,
+		description TEXT NOT NULL,
+		quantity DOUBLE NOT NULL DEFAULT 1,
+		unit_price INTEGER NOT NULL DEFAULT 0,
+		amount INTEGER NOT NULL DEFAULT 0,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_bill_items_bill ON bill_items(bill_id)`,
+
+	// Invoice items: individual line items for an invoice
+	`CREATE TABLE IF NOT EXISTS invoice_items (
+		id INTEGER PRIMARY KEY DEFAULT nextval('invoice_items_id_seq'),
+		invoice_id INTEGER NOT NULL,
+		description TEXT NOT NULL,
+		quantity DOUBLE NOT NULL DEFAULT 1,
+		unit_price INTEGER NOT NULL DEFAULT 0,
+		amount INTEGER NOT NULL DEFAULT 0,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items(invoice_id)`,
 }
