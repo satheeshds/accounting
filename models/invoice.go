@@ -16,9 +16,10 @@ type Invoice struct {
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 	// Computed fields
-	ContactName *string `json:"contact_name,omitempty"`
-	Allocated   Money   `json:"allocated"`
-	Unallocated Money   `json:"unallocated"`
+	ContactName *string       `json:"contact_name,omitempty"`
+	Allocated   Money         `json:"allocated"`
+	Unallocated Money         `json:"unallocated"`
+	Items       []InvoiceItem `json:"items"`
 }
 
 // InvoiceInput is used for creating/updating invoices.
@@ -44,6 +45,38 @@ func (i *InvoiceInput) Validate() string {
 	}
 	if i.Status == "" {
 		i.Status = "draft"
+	}
+	return ""
+}
+
+// InvoiceItem represents a line item within an invoice.
+type InvoiceItem struct {
+	ID          int       `json:"id"`
+	InvoiceID   int       `json:"invoice_id"`
+	Description string    `json:"description"`
+	Quantity    float64   `json:"quantity"`
+	UnitPrice   Money     `json:"unit_price"`
+	Amount      Money     `json:"amount"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// InvoiceItemInput is used for creating/updating invoice line items.
+type InvoiceItemInput struct {
+	Description string  `json:"description"`
+	Quantity    float64 `json:"quantity"`
+	UnitPrice   Money   `json:"unit_price"`
+}
+
+func (i *InvoiceItemInput) Validate() string {
+	if i.Description == "" {
+		return "description is required"
+	}
+	if i.Quantity <= 0 {
+		return "quantity must be positive"
+	}
+	if i.UnitPrice < 0 {
+		return "unit_price must be non-negative"
 	}
 	return ""
 }

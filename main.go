@@ -106,6 +106,10 @@ func main() {
 		r.Delete("/bills/{id}", handlers.DeleteBill)
 		r.Get("/bills/{id}/links", handlers.GetBillLinks)
 		r.Get("/bills/{id}/match-suggestions", handlers.SuggestTransactionsForBill)
+		r.Get("/bills/{id}/items", handlers.ListBillItems)
+		r.Post("/bills/{id}/items", handlers.CreateBillItem)
+		r.Put("/bills/{id}/items/{itemId}", handlers.UpdateBillItem)
+		r.Delete("/bills/{id}/items/{itemId}", handlers.DeleteBillItem)
 
 		// Invoices
 		r.Get("/invoices", handlers.ListInvoices)
@@ -115,6 +119,10 @@ func main() {
 		r.Delete("/invoices/{id}", handlers.DeleteInvoice)
 		r.Get("/invoices/{id}/links", handlers.GetInvoiceLinks)
 		r.Get("/invoices/{id}/match-suggestions", handlers.SuggestTransactionsForInvoice)
+		r.Get("/invoices/{id}/items", handlers.ListInvoiceItems)
+		r.Post("/invoices/{id}/items", handlers.CreateInvoiceItem)
+		r.Put("/invoices/{id}/items/{itemId}", handlers.UpdateInvoiceItem)
+		r.Delete("/invoices/{id}/items/{itemId}", handlers.DeleteInvoiceItem)
 
 		// Transactions
 		r.Get("/transactions", handlers.ListTransactions)
