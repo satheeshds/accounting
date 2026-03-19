@@ -68,8 +68,10 @@ func TestMetadataBaseNameEdgeCases(t *testing.T) {
 	}
 
 	for input, want := range tests {
-		if got := metadataBaseName(input); got != want {
-			t.Fatalf("metadataBaseName(%q) = %q, want %q", input, got, want)
-		}
+		t.Run(input, func(t *testing.T) {
+			if got := metadataBaseName(input); got != want {
+				t.Fatalf("metadataBaseName(%q) = %q, want %q", input, got, want)
+			}
+		})
 	}
 }
