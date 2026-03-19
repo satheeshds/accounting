@@ -191,6 +191,7 @@ func envBool(key string, defaultValue bool) bool {
 
 	parsed, err := strconv.ParseBool(value)
 	if err != nil {
+		slog.Warn("invalid boolean environment variable, using default", "key", key, "value", value, "default", defaultValue)
 		return defaultValue
 	}
 	return parsed
