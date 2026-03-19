@@ -87,7 +87,7 @@ func openDuckLake(cfg connectionConfig) (*sql.DB, error) {
 }
 
 func openDuckDB(dbPath string, singleConnection bool) (*sql.DB, error) {
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
