@@ -55,6 +55,7 @@ type BillItem struct {
 	BillID      int       `json:"bill_id"`
 	Description string    `json:"description"`
 	Quantity    float64   `json:"quantity"`
+	Unit        *string   `json:"unit"`
 	UnitPrice   Money     `json:"unit_price"`
 	Amount      Money     `json:"amount"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -65,7 +66,9 @@ type BillItem struct {
 type BillItemInput struct {
 	Description string  `json:"description"`
 	Quantity    float64 `json:"quantity"`
+	Unit        *string `json:"unit"`
 	UnitPrice   Money   `json:"unit_price"`
+	Amount      Money   `json:"amount"`
 }
 
 func (b *BillItemInput) Validate() string {
@@ -77,6 +80,9 @@ func (b *BillItemInput) Validate() string {
 	}
 	if b.UnitPrice < 0 {
 		return "unit_price must be non-negative"
+	}
+	if b.Amount <= 0 {
+		return "amount must be positive"
 	}
 	return ""
 }

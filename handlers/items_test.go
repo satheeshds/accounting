@@ -76,11 +76,13 @@ func TestBillItemsCRUD(t *testing.T) {
 		t.Errorf("expected 0 items initially, got %d", len(items))
 	}
 
-	// Create an item.
+	// Create an item with unit and client-supplied amount.
 	status, resp = apiRequest(t, r, "POST", fmt.Sprintf("/api/v1/bills/%d/items", billID), map[string]interface{}{
 		"description": "Widget A",
 		"quantity":    2.0,
+		"unit":        "pcs",
 		"unit_price":  50.0, // 50 rupees = 5000 paise
+		"amount":      100.0, // client-supplied: 100 rupees = 10000 paise
 	})
 	if status != http.StatusCreated {
 		t.Fatalf("create bill item: status %d, error %v", status, resp["error"])
@@ -90,7 +92,10 @@ func TestBillItemsCRUD(t *testing.T) {
 	if itemData["description"] != "Widget A" {
 		t.Errorf("expected description 'Widget A', got %v", itemData["description"])
 	}
-	// amount should be quantity * unit_price = 2 * 5000 = 10000 paise
+	if itemData["unit"] != "pcs" {
+		t.Errorf("expected unit 'pcs', got %v", itemData["unit"])
+	}
+	// amount should be the client-supplied value: 100 rupees = 10000 paise
 	if int(itemData["amount"].(float64)) != 10000 {
 		t.Errorf("expected amount 10000, got %v", itemData["amount"])
 	}
@@ -116,11 +121,12 @@ func TestBillItemsCRUD(t *testing.T) {
 		t.Errorf("expected 1 item in bill response, got %d", len(billItems))
 	}
 
-	// Update the item.
+	// Update the item with a different client-supplied amount and no unit.
 	status, resp = apiRequest(t, r, "PUT", fmt.Sprintf("/api/v1/bills/%d/items/%d", billID, itemID), map[string]interface{}{
 		"description": "Widget A Updated",
 		"quantity":    3.0,
 		"unit_price":  50.0,
+		"amount":      150.0, // client-supplied: 150 rupees = 15000 paise
 	})
 	if status != http.StatusOK {
 		t.Fatalf("update bill item: status %d, error %v", status, resp["error"])
@@ -162,6 +168,7 @@ func TestBillItemsDeletedWithBill(t *testing.T) {
 		"description": "Service fee",
 		"quantity":    1.0,
 		"unit_price":  100.0,
+		"amount":      100.0,
 	})
 
 	// Delete the bill.
@@ -191,22 +198,32 @@ func TestBillItemValidation(t *testing.T) {
 	}{
 		{
 			name:   "missing description",
-			input:  map[string]interface{}{"quantity": 1.0, "unit_price": 10.0},
+			input:  map[string]interface{}{"quantity": 1.0, "unit_price": 10.0, "amount": 10.0},
 			wantOK: false,
 		},
 		{
 			name:   "zero quantity",
-			input:  map[string]interface{}{"description": "item", "quantity": 0.0, "unit_price": 10.0},
+			input:  map[string]interface{}{"description": "item", "quantity": 0.0, "unit_price": 10.0, "amount": 10.0},
 			wantOK: false,
 		},
 		{
 			name:   "negative quantity",
-			input:  map[string]interface{}{"description": "item", "quantity": -1.0, "unit_price": 10.0},
+			input:  map[string]interface{}{"description": "item", "quantity": -1.0, "unit_price": 10.0, "amount": 10.0},
 			wantOK: false,
 		},
 		{
-			name:   "valid item",
+			name:   "missing amount",
 			input:  map[string]interface{}{"description": "item", "quantity": 1.0, "unit_price": 10.0},
+			wantOK: false,
+		},
+		{
+			name:   "valid item without unit",
+			input:  map[string]interface{}{"description": "item", "quantity": 1.0, "unit_price": 10.0, "amount": 10.0},
+			wantOK: true,
+		},
+		{
+			name:   "valid item with unit",
+			input:  map[string]interface{}{"description": "item", "quantity": 1.0, "unit": "kg", "unit_price": 10.0, "amount": 10.0},
 			wantOK: true,
 		},
 	}
@@ -241,18 +258,23 @@ func TestInvoiceItemsCRUD(t *testing.T) {
 		t.Errorf("expected 0 items initially, got %d", len(items))
 	}
 
-	// Create an item.
+	// Create an item with unit and client-supplied amount.
 	status, resp = apiRequest(t, r, "POST", fmt.Sprintf("/api/v1/invoices/%d/items", invoiceID), map[string]interface{}{
 		"description": "Consulting",
 		"quantity":    4.0,
+		"unit":        "hrs",
 		"unit_price":  25.0, // 25 rupees = 2500 paise
+		"amount":      100.0, // client-supplied: 100 rupees = 10000 paise
 	})
 	if status != http.StatusCreated {
 		t.Fatalf("create invoice item: status %d, error %v", status, resp["error"])
 	}
 	itemData := resp["data"].(map[string]interface{})
 	itemID := int(itemData["id"].(float64))
-	// amount = 4 * 2500 = 10000 paise
+	if itemData["unit"] != "hrs" {
+		t.Errorf("expected unit 'hrs', got %v", itemData["unit"])
+	}
+	// amount should be client-supplied value: 100 rupees = 10000 paise
 	if int(itemData["amount"].(float64)) != 10000 {
 		t.Errorf("expected amount 10000, got %v", itemData["amount"])
 	}
@@ -268,11 +290,13 @@ func TestInvoiceItemsCRUD(t *testing.T) {
 		t.Errorf("expected 1 item in invoice response, got %d", len(invItems))
 	}
 
-	// Update the item.
+	// Update the item with a different client-supplied amount.
 	status, resp = apiRequest(t, r, "PUT", fmt.Sprintf("/api/v1/invoices/%d/items/%d", invoiceID, itemID), map[string]interface{}{
 		"description": "Consulting Updated",
 		"quantity":    5.0,
+		"unit":        "hrs",
 		"unit_price":  25.0,
+		"amount":      125.0, // client-supplied: 125 rupees = 12500 paise
 	})
 	if status != http.StatusOK {
 		t.Fatalf("update invoice item: status %d, error %v", status, resp["error"])
@@ -312,6 +336,7 @@ func TestInvoiceItemsDeletedWithInvoice(t *testing.T) {
 		"description": "Subscription",
 		"quantity":    1.0,
 		"unit_price":  200.0,
+		"amount":      200.0,
 	})
 
 	// Delete the invoice.
@@ -338,9 +363,10 @@ func TestBillItemNotFoundWhenBillMissing(t *testing.T) {
 	}
 
 	status, _ = apiRequest(t, r, "POST", "/api/v1/bills/99999/items", map[string]interface{}{
-		"description": "item", "quantity": 1.0, "unit_price": 10.0,
+		"description": "item", "quantity": 1.0, "unit_price": 10.0, "amount": 10.0,
 	})
 	if status != http.StatusNotFound {
 		t.Errorf("expected 404 creating item on non-existent bill, got %d", status)
 	}
 }
+

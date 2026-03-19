@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,7 +31,7 @@ func scanBill(scanner interface{ Scan(...any) error }) (models.Bill, error) {
 }
 
 func loadBillItems(billID int) ([]models.BillItem, error) {
-	rows, err := DB.Query(`SELECT id, bill_id, description, quantity, unit_price, amount, created_at, updated_at
+	rows, err := DB.Query(`SELECT id, bill_id, description, quantity, unit, unit_price, amount, created_at, updated_at
 		FROM bill_items WHERE bill_id = ? ORDER BY id ASC`, billID)
 	if err != nil {
 		return nil, err
@@ -43,7 +42,7 @@ func loadBillItems(billID int) ([]models.BillItem, error) {
 	for rows.Next() {
 		var item models.BillItem
 		if err := rows.Scan(&item.ID, &item.BillID, &item.Description, &item.Quantity,
-			&item.UnitPrice, &item.Amount, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			&item.Unit, &item.UnitPrice, &item.Amount, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -398,22 +397,20 @@ func CreateBillItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	amount := models.Money(math.Round(input.Quantity * float64(input.UnitPrice)))
-
 	var itemID int
-	err := DB.QueryRow(`INSERT INTO bill_items (bill_id, description, quantity, unit_price, amount)
-		VALUES (?, ?, ?, ?, ?) RETURNING id`,
-		billID, input.Description, input.Quantity, input.UnitPrice, amount).Scan(&itemID)
+	err := DB.QueryRow(`INSERT INTO bill_items (bill_id, description, quantity, unit, unit_price, amount)
+		VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
+		billID, input.Description, input.Quantity, input.Unit, input.UnitPrice, input.Amount).Scan(&itemID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	var item models.BillItem
-	err = DB.QueryRow(`SELECT id, bill_id, description, quantity, unit_price, amount, created_at, updated_at
+	err = DB.QueryRow(`SELECT id, bill_id, description, quantity, unit, unit_price, amount, created_at, updated_at
 		FROM bill_items WHERE id = ?`, itemID).Scan(
 		&item.ID, &item.BillID, &item.Description, &item.Quantity,
-		&item.UnitPrice, &item.Amount, &item.CreatedAt, &item.UpdatedAt)
+		&item.Unit, &item.UnitPrice, &item.Amount, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to re-fetch created item: "+err.Error())
 		return
@@ -449,11 +446,9 @@ func UpdateBillItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	amount := models.Money(math.Round(input.Quantity * float64(input.UnitPrice)))
-
-	res, err := DB.Exec(`UPDATE bill_items SET description = ?, quantity = ?, unit_price = ?, amount = ?,
+	res, err := DB.Exec(`UPDATE bill_items SET description = ?, quantity = ?, unit = ?, unit_price = ?, amount = ?,
 		updated_at = CURRENT_TIMESTAMP WHERE id = ? AND bill_id = ?`,
-		input.Description, input.Quantity, input.UnitPrice, amount, itemID, billID)
+		input.Description, input.Quantity, input.Unit, input.UnitPrice, input.Amount, itemID, billID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -464,10 +459,10 @@ func UpdateBillItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var item models.BillItem
-	err = DB.QueryRow(`SELECT id, bill_id, description, quantity, unit_price, amount, created_at, updated_at
+	err = DB.QueryRow(`SELECT id, bill_id, description, quantity, unit, unit_price, amount, created_at, updated_at
 		FROM bill_items WHERE id = ?`, itemID).Scan(
 		&item.ID, &item.BillID, &item.Description, &item.Quantity,
-		&item.UnitPrice, &item.Amount, &item.CreatedAt, &item.UpdatedAt)
+		&item.Unit, &item.UnitPrice, &item.Amount, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to re-fetch updated item: "+err.Error())
 		return

@@ -55,6 +55,7 @@ type InvoiceItem struct {
 	InvoiceID   int       `json:"invoice_id"`
 	Description string    `json:"description"`
 	Quantity    float64   `json:"quantity"`
+	Unit        *string   `json:"unit"`
 	UnitPrice   Money     `json:"unit_price"`
 	Amount      Money     `json:"amount"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -65,7 +66,9 @@ type InvoiceItem struct {
 type InvoiceItemInput struct {
 	Description string  `json:"description"`
 	Quantity    float64 `json:"quantity"`
+	Unit        *string `json:"unit"`
 	UnitPrice   Money   `json:"unit_price"`
+	Amount      Money   `json:"amount"`
 }
 
 func (i *InvoiceItemInput) Validate() string {
@@ -77,6 +80,9 @@ func (i *InvoiceItemInput) Validate() string {
 	}
 	if i.UnitPrice < 0 {
 		return "unit_price must be non-negative"
+	}
+	if i.Amount <= 0 {
+		return "amount must be positive"
 	}
 	return ""
 }

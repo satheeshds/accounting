@@ -189,6 +189,7 @@ var migrations = []string{
 		bill_id INTEGER NOT NULL,
 		description TEXT NOT NULL,
 		quantity DOUBLE NOT NULL DEFAULT 1,
+		unit TEXT,
 		unit_price INTEGER NOT NULL DEFAULT 0,
 		amount INTEGER NOT NULL DEFAULT 0,
 		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -202,10 +203,15 @@ var migrations = []string{
 		invoice_id INTEGER NOT NULL,
 		description TEXT NOT NULL,
 		quantity DOUBLE NOT NULL DEFAULT 1,
+		unit TEXT,
 		unit_price INTEGER NOT NULL DEFAULT 0,
 		amount INTEGER NOT NULL DEFAULT 0,
 		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items(invoice_id)`,
+
+	// Add unit column to existing bill_items and invoice_items tables (idempotent).
+	`ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS unit TEXT`,
+	`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS unit TEXT`,
 }
