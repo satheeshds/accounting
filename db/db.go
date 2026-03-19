@@ -103,7 +103,7 @@ func openDuckDB(dbPath string, singleConnection bool) (*sql.DB, error) {
 
 	if err := db.Ping(); err != nil {
 		if closeErr := db.Close(); closeErr != nil {
-			slog.Warn("failed to close database after ping error", "path", dbPath, "error", closeErr)
+			slog.Warn("failed to close database connection after ping failure", "path", dbPath, "error", closeErr)
 		}
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}

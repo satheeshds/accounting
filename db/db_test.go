@@ -58,6 +58,21 @@ func TestDuckLakeStatementsEscapePaths(t *testing.T) {
 	}
 }
 
+func TestDuckLakeStatementsKeepSpecialCharactersQuoted(t *testing.T) {
+	cfg := connectionConfig{
+		metadataPath: "/tmp/tenant';\n--/accounting.ducklake",
+		dataPath:     "/tmp/tenant';\n--/data",
+	}
+
+	attach := duckLakeStatements(cfg)[2]
+	if !strings.Contains(attach, "ducklake:/tmp/tenant'';\n--/accounting.ducklake") {
+		t.Fatalf("attach statement did not preserve quoted metadata path safely: %q", attach)
+	}
+	if !strings.Contains(attach, "DATA_PATH '/tmp/tenant'';\n--/data'") {
+		t.Fatalf("attach statement did not preserve quoted data path safely: %q", attach)
+	}
+}
+
 func TestMetadataBaseNameEdgeCases(t *testing.T) {
 	tests := map[string]string{
 		".ducklake":          "ducklake",
