@@ -15,6 +15,7 @@ func setupItemsTestRouter(t *testing.T) (*chi.Mux, func()) {
 	// Register bill item routes
 	r.Post("/api/v1/bills", CreateBill)
 	r.Get("/api/v1/bills/{id}", GetBill)
+	r.Put("/api/v1/bills/{id}", UpdateBill)
 	r.Delete("/api/v1/bills/{id}", DeleteBill)
 	r.Get("/api/v1/bills/{id}/items", ListBillItems)
 	r.Post("/api/v1/bills/{id}/items", CreateBillItem)
@@ -24,6 +25,7 @@ func setupItemsTestRouter(t *testing.T) (*chi.Mux, func()) {
 	// Register invoice item routes
 	r.Post("/api/v1/invoices", CreateInvoice)
 	r.Get("/api/v1/invoices/{id}", GetInvoice)
+	r.Put("/api/v1/invoices/{id}", UpdateInvoice)
 	r.Delete("/api/v1/invoices/{id}", DeleteInvoice)
 	r.Get("/api/v1/invoices/{id}/items", ListInvoiceItems)
 	r.Post("/api/v1/invoices/{id}/items", CreateInvoiceItem)
@@ -81,7 +83,7 @@ func TestBillItemsCRUD(t *testing.T) {
 		"description": "Widget A",
 		"quantity":    2.0,
 		"unit":        "pcs",
-		"unit_price":  50.0, // 50 rupees = 5000 paise
+		"unit_price":  50.0,  // 50 rupees = 5000 paise
 		"amount":      100.0, // client-supplied: 100 rupees = 10000 paise
 	})
 	if status != http.StatusCreated {
@@ -241,6 +243,67 @@ func TestBillItemValidation(t *testing.T) {
 	}
 }
 
+// TestBillCreateAndUpdateWithItems verifies that bills can be created and updated with inline items.
+func TestBillCreateAndUpdateWithItems(t *testing.T) {
+	r, cleanup := setupItemsTestRouter(t)
+	defer cleanup()
+
+	createStatus, createResp := apiRequest(t, r, "POST", "/api/v1/bills", map[string]interface{}{
+		"bill_number": "BILL-INLINE",
+		"amount":      200.0,
+		"status":      "draft",
+		"items": []map[string]interface{}{
+			{"description": "Item A", "quantity": 2.0, "unit_price": 50.0, "amount": 100.0},
+			{"description": "Item B", "quantity": 1.0, "unit_price": 100.0, "amount": 100.0},
+		},
+	})
+	if createStatus != http.StatusCreated {
+		t.Fatalf("create bill with items: status %d, error %v", createStatus, createResp["error"])
+	}
+	billData := createResp["data"].(map[string]interface{})
+	billID := int(billData["id"].(float64))
+	items := billData["items"].([]interface{})
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items on create response, got %d", len(items))
+	}
+	first := items[0].(map[string]interface{})
+	if int(first["amount"].(float64)) != 10000 {
+		t.Fatalf("expected first item amount 10000, got %v", first["amount"])
+	}
+
+	status, listResp := apiRequest(t, r, "GET", fmt.Sprintf("/api/v1/bills/%d/items", billID), nil)
+	if status != http.StatusOK {
+		t.Fatalf("list items after create: status %d, error %v", status, listResp["error"])
+	}
+	if len(listResp["data"].([]interface{})) != 2 {
+		t.Fatalf("expected 2 stored items, got %d", len(listResp["data"].([]interface{})))
+	}
+
+	updateStatus, updateResp := apiRequest(t, r, "PUT", fmt.Sprintf("/api/v1/bills/%d", billID), map[string]interface{}{
+		"bill_number": "BILL-INLINE",
+		"amount":      300.0,
+		"status":      "received",
+		"items": []map[string]interface{}{
+			{"description": "Updated Item", "quantity": 3.0, "unit_price": 100.0, "amount": 300.0},
+		},
+	})
+	if updateStatus != http.StatusOK {
+		t.Fatalf("update bill with items: status %d, error %v", updateStatus, updateResp["error"])
+	}
+	updatedBill := updateResp["data"].(map[string]interface{})
+	updatedItems := updatedBill["items"].([]interface{})
+	if len(updatedItems) != 1 {
+		t.Fatalf("expected 1 item after update, got %d", len(updatedItems))
+	}
+	updated := updatedItems[0].(map[string]interface{})
+	if updated["description"] != "Updated Item" {
+		t.Fatalf("expected updated description, got %v", updated["description"])
+	}
+	if int(updated["amount"].(float64)) != 30000 {
+		t.Fatalf("expected updated amount 30000, got %v", updated["amount"])
+	}
+}
+
 // TestInvoiceItemsCRUD tests create, list, update, and delete of invoice line items.
 func TestInvoiceItemsCRUD(t *testing.T) {
 	r, cleanup := setupItemsTestRouter(t)
@@ -263,7 +326,7 @@ func TestInvoiceItemsCRUD(t *testing.T) {
 		"description": "Consulting",
 		"quantity":    4.0,
 		"unit":        "hrs",
-		"unit_price":  25.0, // 25 rupees = 2500 paise
+		"unit_price":  25.0,  // 25 rupees = 2500 paise
 		"amount":      100.0, // client-supplied: 100 rupees = 10000 paise
 	})
 	if status != http.StatusCreated {
@@ -352,6 +415,54 @@ func TestInvoiceItemsDeletedWithInvoice(t *testing.T) {
 	}
 }
 
+// TestInvoiceCreateAndUpdateWithItems verifies that invoices can be created and updated with inline items.
+func TestInvoiceCreateAndUpdateWithItems(t *testing.T) {
+	r, cleanup := setupItemsTestRouter(t)
+	defer cleanup()
+
+	createStatus, createResp := apiRequest(t, r, "POST", "/api/v1/invoices", map[string]interface{}{
+		"invoice_number": "INV-INLINE",
+		"amount":         150.0,
+		"status":         "draft",
+		"items": []map[string]interface{}{
+			{"description": "Service", "quantity": 3.0, "unit_price": 50.0, "amount": 150.0},
+		},
+	})
+	if createStatus != http.StatusCreated {
+		t.Fatalf("create invoice with items: status %d, error %v", createStatus, createResp["error"])
+	}
+	invoiceData := createResp["data"].(map[string]interface{})
+	invoiceID := int(invoiceData["id"].(float64))
+	items := invoiceData["items"].([]interface{})
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item on invoice create, got %d", len(items))
+	}
+	if int(items[0].(map[string]interface{})["amount"].(float64)) != 15000 {
+		t.Fatalf("expected item amount 15000, got %v", items[0].(map[string]interface{})["amount"])
+	}
+
+	updateStatus, updateResp := apiRequest(t, r, "PUT", fmt.Sprintf("/api/v1/invoices/%d", invoiceID), map[string]interface{}{
+		"invoice_number": "INV-INLINE",
+		"amount":         200.0,
+		"status":         "sent",
+		"items": []map[string]interface{}{
+			{"description": "Updated Service", "quantity": 4.0, "unit_price": 50.0, "amount": 200.0},
+			{"description": "Add-on", "quantity": 1.0, "unit_price": 50.0, "amount": 50.0},
+		},
+	})
+	if updateStatus != http.StatusOK {
+		t.Fatalf("update invoice with items: status %d, error %v", updateStatus, updateResp["error"])
+	}
+	updatedInvoice := updateResp["data"].(map[string]interface{})
+	updatedItems := updatedInvoice["items"].([]interface{})
+	if len(updatedItems) != 2 {
+		t.Fatalf("expected 2 items after invoice update, got %d", len(updatedItems))
+	}
+	if updatedItems[0].(map[string]interface{})["description"] != "Updated Service" {
+		t.Fatalf("unexpected updated item description: %v", updatedItems[0].(map[string]interface{})["description"])
+	}
+}
+
 // TestBillItemNotFoundWhenBillMissing verifies 404 for items on non-existent bill.
 func TestBillItemNotFoundWhenBillMissing(t *testing.T) {
 	r, cleanup := setupItemsTestRouter(t)
@@ -369,4 +480,3 @@ func TestBillItemNotFoundWhenBillMissing(t *testing.T) {
 		t.Errorf("expected 404 creating item on non-existent bill, got %d", status)
 	}
 }
-
