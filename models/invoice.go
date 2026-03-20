@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Invoice represents a receivable invoice to a customer.
 type Invoice struct {
@@ -24,14 +27,15 @@ type Invoice struct {
 
 // InvoiceInput is used for creating/updating invoices.
 type InvoiceInput struct {
-	ContactID     *int    `json:"contact_id"`
-	InvoiceNumber string  `json:"invoice_number"`
-	IssueDate     *string `json:"issue_date"`
-	DueDate       *string `json:"due_date"`
-	Amount        Money   `json:"amount"`
-	Status        string  `json:"status"`
-	FileURL       *string `json:"file_url"`
-	Notes         *string `json:"notes"`
+	ContactID     *int               `json:"contact_id"`
+	InvoiceNumber string             `json:"invoice_number"`
+	IssueDate     *string            `json:"issue_date"`
+	DueDate       *string            `json:"due_date"`
+	Amount        Money              `json:"amount"`
+	Status        string             `json:"status"`
+	FileURL       *string            `json:"file_url"`
+	Notes         *string            `json:"notes"`
+	Items         []InvoiceItemInput `json:"items"`
 }
 
 func (i *InvoiceInput) Validate() string {
@@ -45,6 +49,11 @@ func (i *InvoiceInput) Validate() string {
 	}
 	if i.Status == "" {
 		i.Status = "draft"
+	}
+	for idx := range i.Items {
+		if msg := i.Items[idx].Validate(); msg != "" {
+			return fmt.Sprintf("items[%d]: %s", idx, msg)
+		}
 	}
 	return ""
 }

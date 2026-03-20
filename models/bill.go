@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Bill represents a payable bill from a vendor.
 type Bill struct {
@@ -24,14 +27,15 @@ type Bill struct {
 
 // BillInput is used for creating/updating bills.
 type BillInput struct {
-	ContactID  *int    `json:"contact_id"`
-	BillNumber string  `json:"bill_number"`
-	IssueDate  *string `json:"issue_date"`
-	DueDate    *string `json:"due_date"`
-	Amount     Money   `json:"amount"`
-	Status     string  `json:"status"`
-	FileURL    *string `json:"file_url"`
-	Notes      *string `json:"notes"`
+	ContactID  *int            `json:"contact_id"`
+	BillNumber string          `json:"bill_number"`
+	IssueDate  *string         `json:"issue_date"`
+	DueDate    *string         `json:"due_date"`
+	Amount     Money           `json:"amount"`
+	Status     string          `json:"status"`
+	FileURL    *string         `json:"file_url"`
+	Notes      *string         `json:"notes"`
+	Items      []BillItemInput `json:"items"`
 }
 
 func (b *BillInput) Validate() string {
@@ -45,6 +49,11 @@ func (b *BillInput) Validate() string {
 	}
 	if b.Status == "" {
 		b.Status = "draft"
+	}
+	for i := range b.Items {
+		if msg := b.Items[i].Validate(); msg != "" {
+			return fmt.Sprintf("items[%d]: %s", i, msg)
+		}
 	}
 	return ""
 }

@@ -65,6 +65,22 @@ func getInvoiceByID(id int) (models.Invoice, error) {
 	return inv, err
 }
 
+func insertInvoiceItems(tx *sql.Tx, invoiceID int, items []models.InvoiceItemInput) error {
+	stmt, err := tx.Prepare(`INSERT INTO invoice_items (invoice_id, description, quantity, unit, unit_price, amount)
+		VALUES (?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, item := range items {
+		if _, err := stmt.Exec(invoiceID, item.Description, item.Quantity, item.Unit, item.UnitPrice, item.Amount); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ListInvoices lists all invoices
 // @Summary      List invoices
 // @Description  Get a list of all receivable invoices, with current status and allocation info.
@@ -176,12 +192,31 @@ func CreateInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tx, err := DB.Begin()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
 	var id int
-	err := DB.QueryRow(`INSERT INTO invoices (contact_id, invoice_number, issue_date, due_date, amount, status, file_url, notes)
+	err = tx.QueryRow(`INSERT INTO invoices (contact_id, invoice_number, issue_date, due_date, amount, status, file_url, notes)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		input.ContactID, input.InvoiceNumber, input.IssueDate, input.DueDate,
 		input.Amount, input.Status, input.FileURL, input.Notes).Scan(&id)
 	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if err := insertInvoiceItems(tx, id, input.Items); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -219,7 +254,16 @@ func UpdateInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := DB.Exec(`UPDATE invoices SET contact_id = ?, invoice_number = ?, issue_date = ?, due_date = ?,
+	tx, err := DB.Begin()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	res, err := tx.Exec(`UPDATE invoices SET contact_id = ?, invoice_number = ?, issue_date = ?, due_date = ?,
 		amount = ?, status = ?, file_url = ?, notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 		input.ContactID, input.InvoiceNumber, input.IssueDate, input.DueDate,
 		input.Amount, input.Status, input.FileURL, input.Notes, id)
@@ -231,6 +275,23 @@ func UpdateInvoice(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "invoice not found")
 		return
 	}
+
+	if input.Items != nil {
+		if _, err := tx.Exec("DELETE FROM invoice_items WHERE invoice_id = ?", id); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if err := insertInvoiceItems(tx, id, input.Items); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	inv, err := getInvoiceByID(id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to re-fetch updated invoice: "+err.Error())

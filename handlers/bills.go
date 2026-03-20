@@ -65,6 +65,22 @@ func getBillByID(id int) (models.Bill, error) {
 	return b, err
 }
 
+func insertBillItems(tx *sql.Tx, billID int, items []models.BillItemInput) error {
+	stmt, err := tx.Prepare(`INSERT INTO bill_items (bill_id, description, quantity, unit, unit_price, amount)
+		VALUES (?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, item := range items {
+		if _, err := stmt.Exec(billID, item.Description, item.Quantity, item.Unit, item.UnitPrice, item.Amount); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ListBills lists all bills
 // @Summary      List bills
 // @Description  Get a list of all payable bills, with current status and allocation info.
@@ -176,12 +192,31 @@ func CreateBill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tx, err := DB.Begin()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
 	var id int
-	err := DB.QueryRow(`INSERT INTO bills (contact_id, bill_number, issue_date, due_date, amount, status, file_url, notes)
+	err = tx.QueryRow(`INSERT INTO bills (contact_id, bill_number, issue_date, due_date, amount, status, file_url, notes)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		input.ContactID, input.BillNumber, input.IssueDate, input.DueDate,
 		input.Amount, input.Status, input.FileURL, input.Notes).Scan(&id)
 	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if err := insertBillItems(tx, id, input.Items); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -219,7 +254,16 @@ func UpdateBill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := DB.Exec(`UPDATE bills SET contact_id = ?, bill_number = ?, issue_date = ?, due_date = ?,
+	tx, err := DB.Begin()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	res, err := tx.Exec(`UPDATE bills SET contact_id = ?, bill_number = ?, issue_date = ?, due_date = ?,
 		amount = ?, status = ?, file_url = ?, notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 		input.ContactID, input.BillNumber, input.IssueDate, input.DueDate,
 		input.Amount, input.Status, input.FileURL, input.Notes, id)
@@ -231,6 +275,23 @@ func UpdateBill(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "bill not found")
 		return
 	}
+
+	if input.Items != nil {
+		if _, err := tx.Exec("DELETE FROM bill_items WHERE bill_id = ?", id); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if err := insertBillItems(tx, id, input.Items); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	b, err := getBillByID(id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to re-fetch updated bill: "+err.Error())
