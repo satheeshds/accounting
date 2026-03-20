@@ -50,6 +50,9 @@ func loadInvoiceItems(invoiceID int) ([]models.InvoiceItem, error) {
 	if items == nil {
 		items = []models.InvoiceItem{}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return items, nil
 }
 

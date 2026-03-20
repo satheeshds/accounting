@@ -50,6 +50,9 @@ func loadBillItems(billID int) ([]models.BillItem, error) {
 	if items == nil {
 		items = []models.BillItem{}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return items, nil
 }
 
@@ -408,7 +411,7 @@ func CreateBillItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var itemID int
-	err := DB.QueryRow(`INSERT INTO bill_items (bill_id, description, quantity, unit, unit_price, amount)
+	err = DB.QueryRow(`INSERT INTO bill_items (bill_id, description, quantity, unit, unit_price, amount)
 		VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
 		billID, input.Description, input.Quantity, input.Unit, input.UnitPrice, input.Amount).Scan(&itemID)
 	if err != nil {
