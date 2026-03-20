@@ -30,8 +30,39 @@ func scanInvoice(scanner interface{ Scan(...any) error }) (models.Invoice, error
 	return inv, err
 }
 
+func loadInvoiceItems(invoiceID int) ([]models.InvoiceItem, error) {
+	rows, err := DB.Query(`SELECT id, invoice_id, description, quantity, unit, unit_price, amount, created_at, updated_at
+		FROM invoice_items WHERE invoice_id = ? ORDER BY id ASC`, invoiceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []models.InvoiceItem
+	for rows.Next() {
+		var item models.InvoiceItem
+		if err := rows.Scan(&item.ID, &item.InvoiceID, &item.Description, &item.Quantity,
+			&item.Unit, &item.UnitPrice, &item.Amount, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if items == nil {
+		items = []models.InvoiceItem{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func getInvoiceByID(id int) (models.Invoice, error) {
-	return scanInvoice(DB.QueryRow(invoiceSelectQuery+" WHERE i.id = ?", id))
+	inv, err := scanInvoice(DB.QueryRow(invoiceSelectQuery+" WHERE i.id = ?", id))
+	if err != nil {
+		return inv, err
+	}
+	inv.Items, err = loadInvoiceItems(id)
+	return inv, err
 }
 
 // ListInvoices lists all invoices
@@ -90,6 +121,7 @@ func ListInvoices(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		inv.Items = []models.InvoiceItem{}
 		invoices = append(invoices, inv)
 	}
 	if invoices == nil {
@@ -233,6 +265,13 @@ func DeleteInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Remove all line items for this invoice.
+	if _, err := tx.Exec("DELETE FROM invoice_items WHERE invoice_id = ?", id); err != nil {
+		_ = tx.Rollback()
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	res, err := tx.Exec("DELETE FROM invoices WHERE id = ?", id)
 	if err != nil {
 		_ = tx.Rollback()
@@ -306,4 +345,173 @@ type InvoiceLink struct {
 	Description     string `json:"description"`
 	Reference       string `json:"reference"`
 	AccountName     string `json:"account_name"`
+}
+
+// ListInvoiceItems lists all line items for an invoice
+// @Summary      List invoice items
+// @Description  Get all line items for a specific invoice.
+// @Tags         invoices
+// @Produce      json
+// @Param        id   path      int  true  "Invoice ID"
+// @Success      200  {object}  Response{data=[]models.InvoiceItem}
+// @Failure      404  {object}  Response{error=string}
+// @Router       /invoices/{id}/items [get]
+// @Security     BasicAuth
+func ListInvoiceItems(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
+
+	// Verify invoice exists.
+	var exists bool
+	err := DB.QueryRow("SELECT COUNT(*) > 0 FROM invoices WHERE id = ?", id).Scan(&exists)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !exists {
+		writeError(w, http.StatusNotFound, "invoice not found")
+		return
+	}
+
+	items, err := loadInvoiceItems(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+// CreateInvoiceItem creates a new line item for an invoice
+// @Summary      Create invoice item
+// @Description  Add a new line item to an existing invoice.
+// @Tags         invoices
+// @Accept       json
+// @Produce      json
+// @Param        id    path      int                      true  "Invoice ID"
+// @Param        item  body      models.InvoiceItemInput  true  "Line item contents"
+// @Success      201   {object}  Response{data=models.InvoiceItem}
+// @Failure      400   {object}  Response{error=string}
+// @Failure      404   {object}  Response{error=string}
+// @Router       /invoices/{id}/items [post]
+// @Security     BasicAuth
+func CreateInvoiceItem(w http.ResponseWriter, r *http.Request) {
+	invoiceID, _ := strconv.Atoi(chi.URLParam(r, "id"))
+
+	// Verify invoice exists.
+	var exists bool
+	if err := DB.QueryRow("SELECT COUNT(*) > 0 FROM invoices WHERE id = ?", invoiceID).Scan(&exists); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to verify invoice existence: "+err.Error())
+		return
+	} else if !exists {
+		writeError(w, http.StatusNotFound, "invoice not found")
+		return
+	}
+
+	var input models.InvoiceItemInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if msg := input.Validate(); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	var itemID int
+	err := DB.QueryRow(`INSERT INTO invoice_items (invoice_id, description, quantity, unit, unit_price, amount)
+		VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
+		invoiceID, input.Description, input.Quantity, input.Unit, input.UnitPrice, input.Amount).Scan(&itemID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var item models.InvoiceItem
+	err = DB.QueryRow(`SELECT id, invoice_id, description, quantity, unit, unit_price, amount, created_at, updated_at
+		FROM invoice_items WHERE id = ?`, itemID).Scan(
+		&item.ID, &item.InvoiceID, &item.Description, &item.Quantity,
+		&item.Unit, &item.UnitPrice, &item.Amount, &item.CreatedAt, &item.UpdatedAt)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch created item: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+// UpdateInvoiceItem updates a line item for an invoice
+// @Summary      Update invoice item
+// @Description  Update an existing line item in an invoice.
+// @Tags         invoices
+// @Accept       json
+// @Produce      json
+// @Param        id      path      int                      true  "Invoice ID"
+// @Param        itemId  path      int                      true  "Item ID"
+// @Param        item    body      models.InvoiceItemInput  true  "Updated line item contents"
+// @Success      200     {object}  Response{data=models.InvoiceItem}
+// @Failure      400     {object}  Response{error=string}
+// @Failure      404     {object}  Response{error=string}
+// @Router       /invoices/{id}/items/{itemId} [put]
+// @Security     BasicAuth
+func UpdateInvoiceItem(w http.ResponseWriter, r *http.Request) {
+	invoiceID, _ := strconv.Atoi(chi.URLParam(r, "id"))
+	itemID, _ := strconv.Atoi(chi.URLParam(r, "itemId"))
+
+	var input models.InvoiceItemInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if msg := input.Validate(); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	res, err := DB.Exec(`UPDATE invoice_items SET description = ?, quantity = ?, unit = ?, unit_price = ?, amount = ?,
+		updated_at = CURRENT_TIMESTAMP WHERE id = ? AND invoice_id = ?`,
+		input.Description, input.Quantity, input.Unit, input.UnitPrice, input.Amount, itemID, invoiceID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		writeError(w, http.StatusNotFound, "invoice item not found")
+		return
+	}
+
+	var item models.InvoiceItem
+	err = DB.QueryRow(`SELECT id, invoice_id, description, quantity, unit, unit_price, amount, created_at, updated_at
+		FROM invoice_items WHERE id = ?`, itemID).Scan(
+		&item.ID, &item.InvoiceID, &item.Description, &item.Quantity,
+		&item.Unit, &item.UnitPrice, &item.Amount, &item.CreatedAt, &item.UpdatedAt)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch updated item: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+// DeleteInvoiceItem deletes a line item from an invoice
+// @Summary      Delete invoice item
+// @Description  Remove a line item from an invoice.
+// @Tags         invoices
+// @Produce      json
+// @Param        id      path      int  true  "Invoice ID"
+// @Param        itemId  path      int  true  "Item ID"
+// @Success      200     {object}  Response{data=map[string]string}
+// @Failure      404     {object}  Response{error=string}
+// @Router       /invoices/{id}/items/{itemId} [delete]
+// @Security     BasicAuth
+func DeleteInvoiceItem(w http.ResponseWriter, r *http.Request) {
+	invoiceID, _ := strconv.Atoi(chi.URLParam(r, "id"))
+	itemID, _ := strconv.Atoi(chi.URLParam(r, "itemId"))
+
+	res, err := DB.Exec("DELETE FROM invoice_items WHERE id = ? AND invoice_id = ?", itemID, invoiceID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		writeError(w, http.StatusNotFound, "invoice item not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "deleted"})
 }

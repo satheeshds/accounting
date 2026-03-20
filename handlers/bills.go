@@ -30,8 +30,39 @@ func scanBill(scanner interface{ Scan(...any) error }) (models.Bill, error) {
 	return b, err
 }
 
+func loadBillItems(billID int) ([]models.BillItem, error) {
+	rows, err := DB.Query(`SELECT id, bill_id, description, quantity, unit, unit_price, amount, created_at, updated_at
+		FROM bill_items WHERE bill_id = ? ORDER BY id ASC`, billID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []models.BillItem
+	for rows.Next() {
+		var item models.BillItem
+		if err := rows.Scan(&item.ID, &item.BillID, &item.Description, &item.Quantity,
+			&item.Unit, &item.UnitPrice, &item.Amount, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if items == nil {
+		items = []models.BillItem{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func getBillByID(id int) (models.Bill, error) {
-	return scanBill(DB.QueryRow(billSelectQuery+" WHERE b.id = ?", id))
+	b, err := scanBill(DB.QueryRow(billSelectQuery+" WHERE b.id = ?", id))
+	if err != nil {
+		return b, err
+	}
+	b.Items, err = loadBillItems(id)
+	return b, err
 }
 
 // ListBills lists all bills
@@ -90,6 +121,7 @@ func ListBills(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		b.Items = []models.BillItem{}
 		bills = append(bills, b)
 	}
 	if bills == nil {
@@ -235,6 +267,12 @@ func DeleteBill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Remove all line items for this bill.
+	if _, err := tx.Exec("DELETE FROM bill_items WHERE bill_id = ?", id); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	res, err := tx.Exec("DELETE FROM bills WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -299,4 +337,175 @@ type BillLink struct {
 	Description     string `json:"description"`
 	Reference       string `json:"reference"`
 	AccountName     string `json:"account_name"`
+}
+
+// ListBillItems lists all line items for a bill
+// @Summary      List bill items
+// @Description  Get all line items for a specific bill.
+// @Tags         bills
+// @Produce      json
+// @Param        id   path      int  true  "Bill ID"
+// @Success      200  {object}  Response{data=[]models.BillItem}
+// @Failure      404  {object}  Response{error=string}
+// @Router       /bills/{id}/items [get]
+// @Security     BasicAuth
+func ListBillItems(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
+
+	// Verify bill exists.
+	var exists bool
+	err := DB.QueryRow("SELECT COUNT(*) > 0 FROM bills WHERE id = ?", id).Scan(&exists)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !exists {
+		writeError(w, http.StatusNotFound, "bill not found")
+		return
+	}
+
+	items, err := loadBillItems(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+// CreateBillItem creates a new line item for a bill
+// @Summary      Create bill item
+// @Description  Add a new line item to an existing bill.
+// @Tags         bills
+// @Accept       json
+// @Produce      json
+// @Param        id    path      int                    true  "Bill ID"
+// @Param        item  body      models.BillItemInput   true  "Line item contents"
+// @Success      201   {object}  Response{data=models.BillItem}
+// @Failure      400   {object}  Response{error=string}
+// @Failure      404   {object}  Response{error=string}
+// @Router       /bills/{id}/items [post]
+// @Security     BasicAuth
+func CreateBillItem(w http.ResponseWriter, r *http.Request) {
+	billID, _ := strconv.Atoi(chi.URLParam(r, "id"))
+
+	// Verify bill exists.
+	var exists bool
+	err := DB.QueryRow("SELECT COUNT(*) > 0 FROM bills WHERE id = ?", billID).Scan(&exists)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to verify bill existence: "+err.Error())
+		return
+	}
+	if !exists {
+		writeError(w, http.StatusNotFound, "bill not found")
+		return
+	}
+
+	var input models.BillItemInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if msg := input.Validate(); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	var itemID int
+	err = DB.QueryRow(`INSERT INTO bill_items (bill_id, description, quantity, unit, unit_price, amount)
+		VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
+		billID, input.Description, input.Quantity, input.Unit, input.UnitPrice, input.Amount).Scan(&itemID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var item models.BillItem
+	err = DB.QueryRow(`SELECT id, bill_id, description, quantity, unit, unit_price, amount, created_at, updated_at
+		FROM bill_items WHERE id = ?`, itemID).Scan(
+		&item.ID, &item.BillID, &item.Description, &item.Quantity,
+		&item.Unit, &item.UnitPrice, &item.Amount, &item.CreatedAt, &item.UpdatedAt)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch created item: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+// UpdateBillItem updates a line item for a bill
+// @Summary      Update bill item
+// @Description  Update an existing line item in a bill.
+// @Tags         bills
+// @Accept       json
+// @Produce      json
+// @Param        id      path      int                   true  "Bill ID"
+// @Param        itemId  path      int                   true  "Item ID"
+// @Param        item    body      models.BillItemInput  true  "Updated line item contents"
+// @Success      200     {object}  Response{data=models.BillItem}
+// @Failure      400     {object}  Response{error=string}
+// @Failure      404     {object}  Response{error=string}
+// @Router       /bills/{id}/items/{itemId} [put]
+// @Security     BasicAuth
+func UpdateBillItem(w http.ResponseWriter, r *http.Request) {
+	billID, _ := strconv.Atoi(chi.URLParam(r, "id"))
+	itemID, _ := strconv.Atoi(chi.URLParam(r, "itemId"))
+
+	var input models.BillItemInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if msg := input.Validate(); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	res, err := DB.Exec(`UPDATE bill_items SET description = ?, quantity = ?, unit = ?, unit_price = ?, amount = ?,
+		updated_at = CURRENT_TIMESTAMP WHERE id = ? AND bill_id = ?`,
+		input.Description, input.Quantity, input.Unit, input.UnitPrice, input.Amount, itemID, billID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		writeError(w, http.StatusNotFound, "bill item not found")
+		return
+	}
+
+	var item models.BillItem
+	err = DB.QueryRow(`SELECT id, bill_id, description, quantity, unit, unit_price, amount, created_at, updated_at
+		FROM bill_items WHERE id = ?`, itemID).Scan(
+		&item.ID, &item.BillID, &item.Description, &item.Quantity,
+		&item.Unit, &item.UnitPrice, &item.Amount, &item.CreatedAt, &item.UpdatedAt)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to re-fetch updated item: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+// DeleteBillItem deletes a line item from a bill
+// @Summary      Delete bill item
+// @Description  Remove a line item from a bill.
+// @Tags         bills
+// @Produce      json
+// @Param        id      path      int  true  "Bill ID"
+// @Param        itemId  path      int  true  "Item ID"
+// @Success      200     {object}  Response{data=map[string]string}
+// @Failure      404     {object}  Response{error=string}
+// @Router       /bills/{id}/items/{itemId} [delete]
+// @Security     BasicAuth
+func DeleteBillItem(w http.ResponseWriter, r *http.Request) {
+	billID, _ := strconv.Atoi(chi.URLParam(r, "id"))
+	itemID, _ := strconv.Atoi(chi.URLParam(r, "itemId"))
+
+	res, err := DB.Exec("DELETE FROM bill_items WHERE id = ? AND bill_id = ?", itemID, billID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		writeError(w, http.StatusNotFound, "bill item not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "deleted"})
 }
