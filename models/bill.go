@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Bill represents a payable bill from a vendor.
 type Bill struct {
@@ -49,7 +52,7 @@ func (b *BillInput) Validate() string {
 	}
 	for i := range b.Items {
 		if msg := b.Items[i].Validate(); msg != "" {
-			return msg
+			return fmt.Sprintf("items[%d]: %s", i, msg)
 		}
 	}
 	return ""

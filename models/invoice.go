@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Invoice represents a receivable invoice to a customer.
 type Invoice struct {
@@ -49,7 +52,7 @@ func (i *InvoiceInput) Validate() string {
 	}
 	for idx := range i.Items {
 		if msg := i.Items[idx].Validate(); msg != "" {
-			return msg
+			return fmt.Sprintf("items[%d]: %s", idx, msg)
 		}
 	}
 	return ""
