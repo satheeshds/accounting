@@ -21,6 +21,7 @@ func TestNormalizeDate(t *testing.T) {
 		{"DD-MM-YYYY with out-of-range month (reordered, DB will reject)", strPtr("02-26-2026"), strPtr("2026-26-02"), false},
 		{"nonsense", strPtr("not-a-date"), nil, true},
 		{"short string", strPtr("26-2-26"), nil, true},
+		{"non-digit day component", strPtr("aa-02-2026"), nil, true},
 	}
 
 	for _, tt := range tests {
