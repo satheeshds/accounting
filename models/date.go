@@ -72,5 +72,19 @@ func reorderDMY(v string, sep byte) (string, error) {
 	if len(dd) != 2 || len(mm) != 2 || len(yyyy) != 4 {
 		return "", fmt.Errorf("unexpected format")
 	}
+	// Ensure all components are numeric to avoid propagating invalid dates downstream.
+	if !isAllDigits(dd) || !isAllDigits(mm) || !isAllDigits(yyyy) {
+		return "", fmt.Errorf("unexpected format")
+	}
 	return yyyy + "-" + mm + "-" + dd, nil
+}
+
+// isAllDigits reports whether s consists only of ASCII digits 0–9.
+func isAllDigits(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
