@@ -68,8 +68,11 @@ func (rr *responseRecorder) WriteHeader(status int) {
 }
 
 func (rr *responseRecorder) Write(b []byte) (int, error) {
-	rr.body.Write(b)
-	return rr.ResponseWriter.Write(b)
+	n, err := rr.ResponseWriter.Write(b)
+	if n > 0 {
+		_, _ = rr.body.Write(b[:n])
+	}
+	return n, err
 }
 
 // DebugLogger is middleware that logs the full request and response bodies at debug level.
