@@ -78,8 +78,8 @@ func main() {
 	// Router setup
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
 	r.Use(handlers.DebugLogger)
+	r.Use(middleware.Recoverer)
 
 	// API routes with basic auth
 	r.Route("/api/v1", func(r chi.Router) {
