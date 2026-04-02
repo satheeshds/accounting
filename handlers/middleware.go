@@ -3,7 +3,6 @@ package handlers
 import (
 	"bufio"
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +10,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+
+	"github.com/satheeshds/portal/db"
 )
 
 // maxBodyLog is the maximum number of bytes captured from request/response bodies for debug logging.
@@ -23,7 +24,7 @@ type Response struct {
 }
 
 // DB is the shared database connection used by all handlers.
-var DB *sql.DB
+var DB *db.PortalDB
 
 // writeJSON writes a JSON response with the given status code.
 func writeJSON(w http.ResponseWriter, status int, data any) {

@@ -3,14 +3,6 @@ FROM golang:1.24-bookworm AS builder
 
 WORKDIR /app
 
-# Install build dependencies for DuckDB (C++)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    libc6-dev \
-    git \
-    && rm -rf /var/lib/apt/lists/*
-
 # Pre-install swag
 RUN go install github.com/swaggo/swag/cmd/swag@latest
 
@@ -28,10 +20,10 @@ RUN swag init -g main.go --dir .
 # Copy remaining source (static, etc)
 COPY . .
 
-# Build with cache mounts
+# Build with cache mounts (pure Go, no CGO needed)
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=1 GOOS=linux go build -o /portal -ldflags="-s -w" .
+    CGO_ENABLED=0 GOOS=linux go build -o /portal -ldflags="-s -w" .
 
 # --- Runtime ---
 FROM debian:bookworm-slim
@@ -42,10 +34,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /portal /usr/local/bin/portal
 
-RUN mkdir -p /data
-VOLUME /data
-
-ENV DB_PATH=/data/portal.db
 ENV PORT=80
 
 EXPOSE 80

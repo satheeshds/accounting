@@ -1,14 +1,13 @@
 package db
 
 import (
-	"database/sql"
 	"fmt"
 	"log/slog"
 )
 
 // Migrate runs all table creation statements. Safe to call multiple times
 // due to IF NOT EXISTS clauses.
-func Migrate(db *sql.DB) error {
+func Migrate(db *PortalDB) error {
 	slog.Info("running database migrations")
 
 	for _, stmt := range migrations {
