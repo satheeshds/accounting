@@ -81,9 +81,13 @@ func main() {
 	r.Use(handlers.RequestLogger)
 	r.Use(middleware.Recoverer)
 
-	// API routes with basic auth
+	// Public auth routes (proxy to Nexus gateway)
+	r.Post("/api/auth/register", handlers.Register)
+	r.Post("/api/auth/login", handlers.Login)
+
+	// API routes with bearer token / basic auth
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(handlers.BasicAuth)
+		r.Use(handlers.BearerAuth)
 
 		// Accounts
 		r.Get("/accounts", handlers.ListAccounts)

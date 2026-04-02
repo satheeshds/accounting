@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +12,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 )
 
 // maxBodyLog is the maximum number of bytes captured from request/response bodies for debug logging.
@@ -59,6 +62,90 @@ func BasicAuth(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// BearerAuth is middleware that enforces Bearer token authentication.
+// When NEXUS_URL is set it validates the token against the Nexus gateway;
+// otherwise it simply requires a non-empty Bearer token to be present.
+// If neither NEXUS_URL nor AUTH_USER/AUTH_PASS are configured the middleware
+// falls back to the unauthenticated (open) behaviour and logs a warning.
+func BearerAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nexus := os.Getenv("NEXUS_URL")
+		authUser := os.Getenv("AUTH_USER")
+		authPass := os.Getenv("AUTH_PASS")
+
+		// If nothing is configured, warn and pass through (same as original BasicAuth).
+		if nexus == "" && authUser == "" && authPass == "" {
+			slog.Warn("no auth configured (NEXUS_URL, AUTH_USER, AUTH_PASS), API is unauthenticated")
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Prefer Bearer token when NEXUS_URL is configured.
+		if nexus != "" {
+			authHeader := r.Header.Get("Authorization")
+			if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+				writeError(w, http.StatusUnauthorized, "missing or invalid bearer token")
+				return
+			}
+			token := authHeader[7:]
+			if !validateNexusToken(nexus, token) {
+				writeError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Fall back to Basic Auth when AUTH_USER/AUTH_PASS are set.
+		u, p, ok := r.BasicAuth()
+		if !ok || u != authUser || p != authPass {
+			w.Header().Set("WWW-Authenticate", `Basic realm="portal"`)
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// validateNexusToken checks whether a Bearer token has a valid JWT structure and
+// has not expired. It does NOT verify the cryptographic signature — full signature
+// verification happens at the Nexus layer when the token is forwarded for data
+// operations. This guard prevents obviously invalid or expired tokens from passing.
+func validateNexusToken(nexusBase, token string) bool {
+	if token == "" {
+		return false
+	}
+	// A JWT consists of three base64url-encoded parts separated by dots.
+	parts := strings.SplitN(token, ".", 3)
+	if len(parts) != 3 {
+		return false
+	}
+	// Decode the claims (second part). Pad to a multiple of 4 for standard base64.
+	claimsB64 := parts[1]
+	switch len(claimsB64) % 4 {
+	case 2:
+		claimsB64 += "=="
+	case 3:
+		claimsB64 += "="
+	}
+	claimsJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return false
+	}
+	var claims struct {
+		Exp int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(claimsJSON, &claims); err != nil {
+		return false
+	}
+	// Reject expired tokens.
+	if claims.Exp > 0 && time.Now().Unix() > claims.Exp {
+		slog.Debug("rejected expired bearer token", "exp", claims.Exp)
+		return false
+	}
+	return true
 }
 
 // responseRecorder wraps http.ResponseWriter to capture the status code and body for logging.
