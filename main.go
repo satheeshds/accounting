@@ -54,17 +54,15 @@ func main() {
 	// Set shared DB for handlers
 	handlers.DB = database
 
-	// Generate recurring payment occurrences for all due dates up to today.
-	// This also covers gap recovery: if the server was offline for weeks/months, all missed
-	// occurrences are created as "pending" so they can be reconciled with bank transactions.
-	if err := db.GenerateOccurrences(database); err != nil {
-		slog.Warn("occurrence generation failed on startup", "error", err)
-	}
-
-	// Daily background job: generate new occurrences as their due dates arrive.
-	// Runs once per day at approximately midnight so the server doesn't need to be restarted
-	// to pick up newly due occurrences.
+	// Background job: generate recurring payment occurrences.
+	// On startup it runs immediately (gap recovery: catches up any missed occurrences while the
+	// server was offline), then repeats once per day at midnight.  Running in a goroutine keeps
+	// startup fast — the HTTP server is ready before the first generation pass completes.
 	go func() {
+		// Immediate run on startup for gap recovery.
+		if err := db.GenerateOccurrences(database); err != nil {
+			slog.Warn("occurrence generation failed on startup", "error", err)
+		}
 		for {
 			now := time.Now()
 			next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
