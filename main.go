@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -45,33 +44,8 @@ func main() {
 	}
 	defer database.Close()
 
-	// Run migrations
-	if err := db.Migrate(); err != nil {
-		slog.Error("failed to run migrations", "error", err)
-		os.Exit(1)
-	}
-
 	// Set shared DB for handlers
 	handlers.DB = database
-
-	// Background job: generate recurring payment occurrences.
-	// On startup it runs immediately (gap recovery: catches up any missed occurrences while the
-	// server was offline), then repeats once per day at midnight.  Running in a goroutine keeps
-	// startup fast — the HTTP server is ready before the first generation pass completes.
-	go func() {
-		// Immediate run on startup for gap recovery.
-		if err := db.GenerateOccurrences(database); err != nil {
-			slog.Warn("occurrence generation failed on startup", "error", err)
-		}
-		for {
-			now := time.Now()
-			next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
-			time.Sleep(time.Until(next))
-			if err := db.GenerateOccurrences(database); err != nil {
-				slog.Warn("daily occurrence generation failed", "error", err)
-			}
-		}
-	}()
 
 	// Router setup
 	r := chi.NewRouter()

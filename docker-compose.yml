@@ -9,10 +9,25 @@ services:
       - NEXUS_USER=portal
       - NEXUS_PASSWORD=changeme
       - NEXUS_DATABASE=lake
-      - NEXUS_CONTROL_URL=http://nexus-control:8080
-      - ADMIN_API_KEY=changeme
       - AUTH_USER=admin
       - AUTH_PASS=changeme
+      - LOG_LEVEL=info
+    restart: unless-stopped
+    depends_on:
+      - nexus-gateway
+
+  platform:
+    build:
+      context: .
+      dockerfile: platform/Dockerfile
+    environment:
+      - NEXUS_HOST=nexus-gateway
+      - NEXUS_PORT=5433
+      - NEXUS_USER=portal
+      - NEXUS_PASSWORD=changeme
+      - NEXUS_DATABASE=lake
+      - NEXUS_CONTROL_URL=http://nexus-control:8080
+      - ADMIN_API_KEY=changeme
       - LOG_LEVEL=info
     restart: unless-stopped
     depends_on:
