@@ -16,15 +16,15 @@ import (
 // or unreachable Nexus gateway never hangs portal requests indefinitely.
 var nexusClient = &http.Client{Timeout: 15 * time.Second}
 
-// nexusURL returns the configured Nexus gateway base URL, trimming any trailing slash.
-func nexusURL() string {
-	return strings.TrimRight(os.Getenv("NEXUS_URL"), "/")
+// nexusControlURL returns the configured Nexus gateway base URL, trimming any trailing slash.
+func nexusControlURL() string {
+	return strings.TrimRight(os.Getenv("NEXUS_CONTROL_URL"), "/")
 }
 
 // Register proxies a tenant registration request to the Nexus gateway.
 //
 // @Summary      Register a new tenant
-// @Description  Proxies registration to the Nexus gateway. Requires NEXUS_URL to be configured.
+// @Description  Proxies registration to the Nexus gateway. Requires NEXUS_CONTROL_URL to be configured.
 // @Tags         auth
 // @Accept       json
 // @Produce      json
@@ -35,9 +35,9 @@ func nexusURL() string {
 // @Failure      502   {object}  Response
 // @Router       /api/auth/register [post]
 func Register(w http.ResponseWriter, r *http.Request) {
-	base := nexusURL()
+	base := nexusControlURL()
 	if base == "" {
-		writeError(w, http.StatusServiceUnavailable, "NEXUS_URL is not configured")
+		writeError(w, http.StatusServiceUnavailable, "NEXUS_CONTROL_URL is not configured")
 		return
 	}
 
@@ -79,9 +79,9 @@ func Register(w http.ResponseWriter, r *http.Request) {
 // @Failure      502   {object}  Response
 // @Router       /api/auth/login [post]
 func Login(w http.ResponseWriter, r *http.Request) {
-	base := nexusURL()
+	base := nexusControlURL()
 	if base == "" {
-		writeError(w, http.StatusServiceUnavailable, "NEXUS_URL is not configured")
+		writeError(w, http.StatusServiceUnavailable, "NEXUS_CONTROL_URL is not configured")
 		return
 	}
 
