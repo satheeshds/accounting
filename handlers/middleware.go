@@ -147,23 +147,30 @@ func BearerAuth(next http.Handler) http.Handler {
 				return
 			}
 
-			// Open a per-request DB connection using the tenant's credentials when
-			// Nexus DB access is configured. defer reqDB.Close() defers to the
-			// enclosing function (this closure) so the connection stays open
-			// until after next.ServeHTTP returns.
+			// Open a per-request DB connection to the Nexus gateway when NEXUS_HOST
+			// is configured, using tenant_id as the PostgreSQL username and the JWT
+			// token as the password. The connection is closed explicitly after the
+			// handler returns to ensure it stays open for the full request lifecycle.
+			// Note: the DSN embeds the JWT token; avoid logging it in error paths.
+			var reqDB *db.PortalDB
 			if os.Getenv("NEXUS_HOST") != "" {
 				if tenantID, ok := extractTenantID(token); ok {
-					if reqDB, err := db.OpenWithCredentials(tenantID, token); err == nil {
-						ctx := withDB(r.Context(), reqDB)
-						r = r.WithContext(ctx)
-						defer reqDB.Close()
+					opened, err := db.OpenWithCredentials(tenantID, token)
+					if err != nil {
+						slog.WarnContext(r.Context(), "failed to open per-request DB connection",
+							"tenant_id", tenantID, "error", err)
 					} else {
-						slog.WarnContext(r.Context(), "failed to open per-request DB connection", "error", err)
+						reqDB = opened
+						r = r.WithContext(withDB(r.Context(), reqDB))
 					}
 				}
 			}
 
 			next.ServeHTTP(w, r)
+
+			if reqDB != nil {
+				reqDB.Close()
+			}
 			return
 		}
 
