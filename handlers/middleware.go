@@ -40,6 +40,19 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	json.NewEncoder(w).Encode(Response{Error: msg})
 }
 
+// DBRequired is middleware that returns 503 Service Unavailable when no database
+// connection has been configured. A per-request connection will be injected here
+// once JWT-based authentication is implemented.
+func DBRequired(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if DB == nil {
+			writeError(w, http.StatusServiceUnavailable, "database connection not available")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // BasicAuth is middleware that enforces HTTP Basic Authentication.
 func BasicAuth(next http.Handler) http.Handler {
 	user := os.Getenv("AUTH_USER")

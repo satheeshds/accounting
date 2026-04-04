@@ -12,7 +12,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/satheeshds/portal/db"
 	_ "github.com/satheeshds/portal/docs"
 	"github.com/satheeshds/portal/handlers"
 	httpSwagger "github.com/swaggo/http-swagger"
@@ -36,17 +35,6 @@ func main() {
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})))
 
-	// Open database
-	database, err := db.Open()
-	if err != nil {
-		slog.Error("failed to open database", "error", err)
-		os.Exit(1)
-	}
-	defer database.Close()
-
-	// Set shared DB for handlers
-	handlers.DB = database
-
 	// Router setup
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -56,6 +44,7 @@ func main() {
 	// API routes with basic auth
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(handlers.BasicAuth)
+		r.Use(handlers.DBRequired)
 
 		// Accounts
 		r.Get("/accounts", handlers.ListAccounts)
