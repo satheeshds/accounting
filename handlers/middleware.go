@@ -3,8 +3,6 @@ package handlers
 import (
 	"bufio"
 	"bytes"
-	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,8 +10,8 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strings"
-	"time"
+
+	"github.com/satheeshds/portal/db"
 )
 
 // maxBodyLog is the maximum number of bytes captured from request/response bodies for debug logging.
@@ -26,7 +24,7 @@ type Response struct {
 }
 
 // DB is the shared database connection used by all handlers.
-var DB *sql.DB
+var DB *db.PortalDB
 
 // writeJSON writes a JSON response with the given status code.
 func writeJSON(w http.ResponseWriter, status int, data any) {
@@ -40,6 +38,19 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(Response{Error: msg})
+}
+
+// DBRequired is middleware that returns 503 Service Unavailable when no database
+// connection has been configured. A per-request connection will be injected here
+// once JWT-based authentication is implemented.
+func DBRequired(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if DB == nil {
+			writeError(w, http.StatusServiceUnavailable, "database connection not available")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // BasicAuth is middleware that enforces HTTP Basic Authentication.
