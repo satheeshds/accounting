@@ -81,6 +81,9 @@ func main() {
 	r.Use(handlers.RequestLogger)
 	r.Use(middleware.Recoverer)
 
+	// Public routes (no authentication required)
+	r.Post("/api/v1/register", handlers.Register)
+
 	// API routes with basic auth
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(handlers.BasicAuth)

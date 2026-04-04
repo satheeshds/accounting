@@ -1,13 +1,18 @@
 package db
 
 import (
+	"bytes"
+	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"os"
 )
 
-// Migrate runs all table creation statements. Safe to call multiple times
-// due to IF NOT EXISTS clauses.
+// Migrate runs all table creation statements against the local DuckDB instance.
+// Safe to call multiple times due to IF NOT EXISTS clauses.
 func Migrate(db *sql.DB) error {
 	slog.Info("running database migrations")
 
@@ -18,6 +23,70 @@ func Migrate(db *sql.DB) error {
 	}
 
 	slog.Info("database migrations complete")
+	return nil
+}
+
+// MigrateViaAPI runs all portal migration statements against all tenant DuckDB
+// sessions via the nexus-control admin query API. It is safe to call multiple
+// times because every statement uses CREATE … IF NOT EXISTS or CREATE INDEX … IF
+// NOT EXISTS, making the operation idempotent.
+//
+// nexusControlURL defaults to the NEXUS_CONTROL_URL environment variable, or
+// http://nexus-control:8080 when neither is provided.
+// adminKey defaults to the ADMIN_API_KEY environment variable when empty.
+func MigrateViaAPI(ctx context.Context, nexusControlURL, adminKey string) error {
+	url := nexusControlURL
+	if url == "" {
+		url = os.Getenv("NEXUS_CONTROL_URL")
+		if url == "" {
+			url = "http://nexus-control:8080"
+		}
+	}
+
+	key := adminKey
+	if key == "" {
+		key = os.Getenv("ADMIN_API_KEY")
+	}
+	if key == "" {
+		return fmt.Errorf("ADMIN_API_KEY is required for MigrateViaAPI")
+	}
+
+	slog.Info("running database migrations via nexus admin API", "url", url)
+
+	for _, stmt := range migrations {
+		if err := execAdminQuery(ctx, url, key, stmt); err != nil {
+			return fmt.Errorf("migration via API failed: %w\nstatement: %s", err, stmt)
+		}
+	}
+
+	slog.Info("database migrations via nexus admin API complete")
+	return nil
+}
+
+// execAdminQuery posts a single SQL statement to the nexus-control admin query
+// endpoint, which executes it against every tenant's DuckDB session.
+func execAdminQuery(ctx context.Context, nexusControlURL, adminKey, query string) error {
+	body, err := json.Marshal(map[string]string{"query": query})
+	if err != nil {
+		return fmt.Errorf("marshal query: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, nexusControlURL+"/api/v1/admin/query", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-API-Key", adminKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("admin query request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("admin query returned status %d", resp.StatusCode)
+	}
 	return nil
 }
 
