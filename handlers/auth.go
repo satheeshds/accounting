@@ -9,7 +9,12 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
+
+// nexusClient is a shared HTTP client with a reasonable timeout so that a slow
+// or unreachable Nexus gateway never hangs portal requests indefinitely.
+var nexusClient = &http.Client{Timeout: 15 * time.Second}
 
 // nexusURL returns the configured Nexus gateway base URL, trimming any trailing slash.
 func nexusURL() string {
@@ -43,7 +48,13 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	target := fmt.Sprintf("%s/api/v1/register", base)
-	resp, err := http.Post(target, "application/json", bytes.NewReader(body)) //nolint:noctx
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, target, bytes.NewReader(body))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create register request")
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := nexusClient.Do(req)
 	if err != nil {
 		slog.Error("nexus register request failed", "error", err)
 		writeError(w, http.StatusBadGateway, "nexus gateway unavailable")
@@ -66,7 +77,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 // @Failure      400   {object}  Response
 // @Failure      401   {object}  Response
 // @Failure      502   {object}  Response
-// @Router       /auth/login [post]
+// @Router       /api/auth/login [post]
 func Login(w http.ResponseWriter, r *http.Request) {
 	base := nexusURL()
 	if base == "" {
@@ -81,7 +92,13 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	target := fmt.Sprintf("%s/api/v1/login", base)
-	resp, err := http.Post(target, "application/json", bytes.NewReader(body)) //nolint:noctx
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, target, bytes.NewReader(body))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create login request")
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := nexusClient.Do(req)
 	if err != nil {
 		slog.Error("nexus login request failed", "error", err)
 		writeError(w, http.StatusBadGateway, "nexus gateway unavailable")
