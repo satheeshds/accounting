@@ -148,13 +148,17 @@ func BearerAuth(next http.Handler) http.Handler {
 			}
 
 			// Open a per-request DB connection using the tenant's credentials when
-			// Nexus DB access is configured.
+			// Nexus DB access is configured. defer reqDB.Close() defers to the
+			// enclosing function (this closure) so the connection stays open
+			// until after next.ServeHTTP returns.
 			if os.Getenv("NEXUS_HOST") != "" {
 				if tenantID, ok := extractTenantID(token); ok {
 					if reqDB, err := db.OpenWithCredentials(tenantID, token); err == nil {
 						ctx := withDB(r.Context(), reqDB)
 						r = r.WithContext(ctx)
 						defer reqDB.Close()
+					} else {
+						slog.WarnContext(r.Context(), "failed to open per-request DB connection", "error", err)
 					}
 				}
 			}
