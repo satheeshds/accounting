@@ -1,34 +1,14 @@
 package main
 
 import (
-	"bytes"
-	"database/sql"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"os"
 	"time"
 
 	"github.com/satheeshds/portal/db"
 	_ "github.com/lib/pq"
 )
-
-type Tenant struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-type TenantsResponse struct {
-	Tenants []Tenant `json:"tenants"`
-}
-
-type ServiceAccountResponse struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Database string `json:"database"`
-}
 
 func main() {
 	// Configure structured logging
@@ -40,7 +20,7 @@ func main() {
 
 	// Migrate and generate occurrences for all tenants immediately on startup (gap recovery),
 	// then repeat daily at midnight.
-	if err := migrateAndGenerateForAllTenants(); err != nil {
+	if err := runForAllTenants(); err != nil {
 		slog.Warn("migration and occurrence generation failed on startup", "error", err)
 	}
 
@@ -48,13 +28,16 @@ func main() {
 		now := time.Now()
 		next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
 		time.Sleep(time.Until(next))
-		if err := migrateAndGenerateForAllTenants(); err != nil {
+		if err := runForAllTenants(); err != nil {
 			slog.Warn("daily migration and occurrence generation failed", "error", err)
 		}
 	}
 }
 
-func migrateAndGenerateForAllTenants() error {
+// runForAllTenants reads configuration from env vars and calls
+// db.MigrateAndGenerateAllTenants, which handles tenant discovery, credential
+// rotation, DB connection, and per-tenant migration + occurrence generation.
+func runForAllTenants() error {
 	controlURL := os.Getenv("NEXUS_CONTROL_URL")
 	if controlURL == "" {
 		controlURL = "http://nexus-control:8080"
@@ -63,7 +46,6 @@ func migrateAndGenerateForAllTenants() error {
 	if adminKey == "" {
 		return fmt.Errorf("ADMIN_API_KEY is required")
 	}
-
 	nexusHost := os.Getenv("NEXUS_HOST")
 	if nexusHost == "" {
 		nexusHost = "nexus-gateway"
@@ -73,103 +55,6 @@ func migrateAndGenerateForAllTenants() error {
 		nexusPort = "5433"
 	}
 
-	// List all tenants
-	tenants, err := listTenants(controlURL, adminKey)
-	if err != nil {
-		return fmt.Errorf("failed to list tenants: %w", err)
-	}
-
-	slog.Info("processing migration and occurrence generation for tenants", "count", len(tenants))
-
-	for _, tenant := range tenants {
-		slog.Info("migrating and generating occurrences for tenant", "tenant_id", tenant.ID, "tenant_name", tenant.Name)
-
-		// Rotate service account to get credentials
-		serviceAccount, err := rotateServiceAccount(controlURL, adminKey, tenant.ID)
-		if err != nil {
-			slog.Error("failed to rotate service account", "tenant_id", tenant.ID, "error", err)
-			continue
-		}
-
-		// Connect to the nexus gateway using tenant-specific credentials
-		connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-			nexusHost, nexusPort, serviceAccount.Username, serviceAccount.Password, serviceAccount.Database)
-
-		sqlDB, err := sql.Open("postgres", connStr)
-		if err != nil {
-			slog.Error("failed to open database connection", "tenant_id", tenant.ID, "error", err)
-			continue
-		}
-
-		database := db.WrapDB(sqlDB)
-
-		// Run migrations and generate occurrences for this tenant
-		if err := db.MigrateAndGenerateTenant(database, tenant.ID); err != nil {
-			slog.Error("failed to migrate and generate occurrences", "tenant_id", tenant.ID, "error", err)
-		}
-
-		database.Close()
-	}
-
-	return nil
+	return db.MigrateAndGenerateAllTenants(controlURL, adminKey, nexusHost, nexusPort)
 }
 
-func listTenants(controlURL, adminKey string) ([]Tenant, error) {
-	endpoint := controlURL + "/api/v1/admin/tenants"
-
-	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Admin-API-Key", adminKey)
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("list tenants returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var tenantsResp TenantsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tenantsResp); err != nil {
-		return nil, fmt.Errorf("failed to decode tenants response: %w", err)
-	}
-
-	return tenantsResp.Tenants, nil
-}
-
-func rotateServiceAccount(controlURL, adminKey, tenantID string) (*ServiceAccountResponse, error) {
-	endpoint := fmt.Sprintf("%s/api/v1/admin/tenants/%s/service-account/rotate", controlURL, tenantID)
-
-	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader([]byte("{}")))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Admin-API-Key", adminKey)
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("rotate service account returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var serviceAccount ServiceAccountResponse
-	if err := json.NewDecoder(resp.Body).Decode(&serviceAccount); err != nil {
-		return nil, fmt.Errorf("failed to decode service account response: %w", err)
-	}
-
-	return &serviceAccount, nil
-}
