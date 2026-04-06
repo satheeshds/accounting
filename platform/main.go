@@ -37,14 +37,5 @@ func runForAllTenants() error {
 	if adminKey == "" {
 		return fmt.Errorf("ADMIN_API_KEY is required")
 	}
-	nexusHost := os.Getenv("NEXUS_HOST")
-	if nexusHost == "" {
-		nexusHost = "nexus-gateway"
-	}
-	nexusPort := os.Getenv("NEXUS_PORT")
-	if nexusPort == "" {
-		nexusPort = "5433"
-	}
-
-	return db.MigrateAndGenerateAllTenants(controlURL, adminKey, nexusHost, nexusPort)
+	return db.MigrateAndGenerateAllTenants(controlURL, adminKey)
 }

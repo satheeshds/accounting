@@ -3,19 +3,17 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/satheeshds/portal/db"
 	_ "github.com/lib/pq"
+	"github.com/satheeshds/portal/db"
 )
 
 // nexusClient is a shared HTTP client. Timeouts are managed at the request level via context
@@ -180,34 +178,17 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Step 3: Connect to the tenant's database.
-	nexusHost := os.Getenv("NEXUS_HOST")
-	if nexusHost == "" {
-		nexusHost = defaultNexusGatewayHost
-	}
-	nexusPort := os.Getenv("NEXUS_PORT")
-	if nexusPort == "" {
-		nexusPort = defaultNexusGatewayPort
-	}
-
-	connURL := &url.URL{
-		Scheme:   "postgres",
-		User:     url.UserPassword(creds.Username, creds.Password),
-		Host:     nexusHost + ":" + nexusPort,
-		Path:     "/" + nexusDatabase(creds.Database),
-		RawQuery: "sslmode=disable",
-	}
-
-	sqlDB, err := sql.Open("postgres", connURL.String())
+	tenantDB, err := db.OpenWithCredentials(creds.Username, creds.Password)
 	if err != nil {
 		slog.Error("failed to open database connection for new tenant", "tenant_id", tenantID, "error", err)
 		// Tenant was created; still return 201. The platform service will retry.
 		writeJSON(w, http.StatusCreated, map[string]string{"tenant_id": tenantID})
 		return
 	}
-	defer sqlDB.Close()
+	defer tenantDB.Close()
 
 	// Step 4: Run migrations and generate occurrences for this tenant.
-	if err := db.MigrateAndGenerateTenant(db.WrapDB(sqlDB), tenantID); err != nil {
+	if err := db.MigrateAndGenerateTenant(tenantDB, tenantID); err != nil {
 		slog.Error("schema initialisation failed after tenant creation", "tenant_id", tenantID, "error", err)
 		// Tenant was created; still return 201. The platform service will retry.
 	}

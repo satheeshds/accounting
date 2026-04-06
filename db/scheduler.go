@@ -2,13 +2,11 @@ package db
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"time"
 
@@ -33,7 +31,7 @@ type serviceAccount struct {
 // This function is intended to be called on startup (gap recovery) and on the daily schedule
 // by the platform service. It is also safe to call in any context that needs to process all
 // tenants in a single pass.
-func MigrateAndGenerateAllTenants(controlURL, adminKey, nexusHost, nexusPort string) error {
+func MigrateAndGenerateAllTenants(controlURL, adminKey string) error {
 	tenants, err := listAllTenants(controlURL, adminKey)
 	if err != nil {
 		return fmt.Errorf("failed to list tenants: %w", err)
@@ -50,25 +48,16 @@ func MigrateAndGenerateAllTenants(controlURL, adminKey, nexusHost, nexusPort str
 			continue
 		}
 
-		connURL := &url.URL{
-			Scheme:   "postgres",
-			User:     url.UserPassword(creds.Username, creds.Password),
-			Host:     nexusHost + ":" + nexusPort,
-			Path:     "/" + tenantDatabase(creds.Database),
-			RawQuery: "sslmode=disable",
-		}
-
-		sqlDB, err := sql.Open("postgres", connURL.String())
+		portalDB, err := OpenWithCredentials(creds.Username, creds.Password)
 		if err != nil {
 			slog.Error("failed to open database connection", "tenant_id", t.ID, "error", err)
 			continue
 		}
 
-		database := WrapDB(sqlDB)
-		if err := MigrateAndGenerateTenant(database, t.ID); err != nil {
+		if err := MigrateAndGenerateTenant(portalDB, t.ID); err != nil {
 			slog.Error("failed to migrate and generate occurrences", "tenant_id", t.ID, "error", err)
 		}
-		database.Close()
+		portalDB.Close()
 	}
 
 	return nil

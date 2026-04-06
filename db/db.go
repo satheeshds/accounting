@@ -11,6 +11,7 @@ import (
 
 // OpenWithCredentials opens a single-connection PortalDB using the given
 // tenant_id as the PostgreSQL username and the JWT token as the password.
+// or service account credentials (username, password)
 // It reads NEXUS_HOST (default "localhost"), NEXUS_PORT (default "5433"),
 // and NEXUS_DATABASE (default "lake") from the environment.
 // The connection is not pinged; the first query will surface any auth errors.
