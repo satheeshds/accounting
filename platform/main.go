@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
 
-	"github.com/satheeshds/portal/db"
 	_ "github.com/lib/pq"
+	"github.com/satheeshds/portal/db"
 )
 
 func main() {
@@ -24,14 +23,6 @@ func main() {
 		slog.Warn("migration and occurrence generation failed on startup", "error", err)
 	}
 
-	for {
-		now := time.Now()
-		next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
-		time.Sleep(time.Until(next))
-		if err := runForAllTenants(); err != nil {
-			slog.Warn("daily migration and occurrence generation failed", "error", err)
-		}
-	}
 }
 
 // runForAllTenants reads configuration from env vars and calls
@@ -57,4 +48,3 @@ func runForAllTenants() error {
 
 	return db.MigrateAndGenerateAllTenants(controlURL, adminKey, nexusHost, nexusPort)
 }
-

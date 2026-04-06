@@ -6,14 +6,29 @@ import (
 	"time"
 )
 
-// GenerateOccurrences creates pending recurring_payment_occurrences for all active recurring
+func RunAndScheduleRecurringOccurrences(database *PortalDB) error {
+	if err := GenerateRecurringOccurrences(database); err != nil {
+		slog.Warn("daily occurrence generation failed", "error", err)
+	}
+
+	for {
+		now := time.Now()
+		next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+		time.Sleep(time.Until(next))
+		if err := GenerateRecurringOccurrences(database); err != nil {
+			slog.Warn("daily occurrence generation failed", "error", err)
+		}
+	}
+}
+
+// GenerateRecurringOccurrences creates pending recurring_payment_occurrences for all active recurring
 // payments whose next_due_date is on or before today. It is idempotent — each (recurring_payment_id,
 // due_date) pair has a UNIQUE constraint, so re-running on an already-generated date is a no-op.
 //
 // Gap recovery: if the server was offline for months the loop runs until next_due_date > today,
 // creating one row per missed period. All missed occurrences appear as "pending" and can be matched
 // to the corresponding bank transactions in statement history.
-func GenerateOccurrences(database *PortalDB) error {
+func GenerateRecurringOccurrences(database *PortalDB) error {
 	today := time.Now().Format("2006-01-02")
 	slog.Info("generating recurring payment occurrences", "up_to", today)
 
