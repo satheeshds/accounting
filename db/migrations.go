@@ -47,99 +47,87 @@ func MigrateAndGenerateTenant(tenantDB *PortalDB, tenantID string) error {
 }
 
 var migrations = []string{
-	// Sequences for autoincrementing IDs (DuckDB requirement)
-	"CREATE SEQUENCE IF NOT EXISTS accounts_id_seq",
-	"CREATE SEQUENCE IF NOT EXISTS contacts_id_seq",
-	"CREATE SEQUENCE IF NOT EXISTS bills_id_seq",
-	"CREATE SEQUENCE IF NOT EXISTS invoices_id_seq",
-	"CREATE SEQUENCE IF NOT EXISTS transactions_id_seq",
-	"CREATE SEQUENCE IF NOT EXISTS transaction_documents_id_seq",
-	"CREATE SEQUENCE IF NOT EXISTS payouts_id_seq",
-	"CREATE SEQUENCE IF NOT EXISTS recurring_payments_id_seq",
-	"CREATE SEQUENCE IF NOT EXISTS recurring_payment_occurrences_id_seq",
-	"CREATE SEQUENCE IF NOT EXISTS bill_items_id_seq",
-	"CREATE SEQUENCE IF NOT EXISTS invoice_items_id_seq",
-
+	// Tables: auto-incrementing IDs are handled via 'SERIAL PRIMARY KEY' (Nexus/DuckLake recommendation)
 	// Accounts: bank, cash, credit card
 	`CREATE TABLE IF NOT EXISTS accounts (
-		id INTEGER PRIMARY KEY DEFAULT nextval('accounts_id_seq'),
+		id INTEGER NOT NULL,
 		name TEXT NOT NULL,
-		type TEXT NOT NULL CHECK(type IN ('bank', 'cash', 'credit_card')),
+		type TEXT NOT NULL,
 		opening_balance INTEGER NOT NULL DEFAULT 0,
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
 	)`,
 
 	// Contacts: vendors and customers
 	`CREATE TABLE IF NOT EXISTS contacts (
-		id INTEGER PRIMARY KEY DEFAULT nextval('contacts_id_seq'),
+		id INTEGER NOT NULL,
 		name TEXT NOT NULL,
-		type TEXT NOT NULL CHECK(type IN ('vendor', 'customer')),
+		type TEXT NOT NULL,
 		email TEXT,
 		phone TEXT,
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
 	)`,
 
 	// Bills: payable to vendors
 	`CREATE TABLE IF NOT EXISTS bills (
-		id INTEGER PRIMARY KEY DEFAULT nextval('bills_id_seq'),
+		id INTEGER NOT NULL,
 		contact_id INTEGER,
 		bill_number TEXT,
 		issue_date DATE,
 		due_date DATE,
 		amount INTEGER NOT NULL DEFAULT 0,
-		status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'partial', 'received', 'paid', 'overdue', 'cancelled')),
+		status TEXT NOT NULL DEFAULT 'draft',
 		file_url TEXT,
 		notes TEXT,
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
 	)`,
 
 	// Invoices: receivable from customers
 	`CREATE TABLE IF NOT EXISTS invoices (
-		id INTEGER PRIMARY KEY DEFAULT nextval('invoices_id_seq'),
+		id INTEGER NOT NULL,
 		contact_id INTEGER,
 		invoice_number TEXT,
 		issue_date DATE,
 		due_date DATE,
 		amount INTEGER NOT NULL DEFAULT 0,
-		status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'partial', 'sent', 'paid', 'received', 'overdue', 'cancelled')),
+		status TEXT NOT NULL DEFAULT 'draft',
 		file_url TEXT,
 		notes TEXT,
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
 	)`,
 
 	// Bank transactions: income, expense, transfer
 	`CREATE TABLE IF NOT EXISTS transactions (
-		id INTEGER PRIMARY KEY DEFAULT nextval('transactions_id_seq'),
+		id INTEGER NOT NULL,
 		account_id INTEGER NOT NULL,
-		type TEXT NOT NULL CHECK(type IN ('income', 'expense', 'transfer')),
+		type TEXT NOT NULL,
 		amount INTEGER NOT NULL DEFAULT 0,
 		transaction_date DATE,
 		description TEXT,
 		reference TEXT,
 		transfer_account_id INTEGER,
 		contact_id INTEGER,
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
 	)`,
 
 	// Junction table: many-to-many transaction <-> bill/invoice/payout/recurring_payment_occurrence.
 	// No CHECK constraint on document_type — valid types are enforced by the application layer.
 	`CREATE TABLE IF NOT EXISTS transaction_documents (
-		id INTEGER PRIMARY KEY DEFAULT nextval('transaction_documents_id_seq'),
+		id INTEGER NOT NULL,
 		transaction_id INTEGER NOT NULL,
 		document_type TEXT NOT NULL,
 		document_id INTEGER NOT NULL,
-		amount INTEGER NOT NULL CHECK(amount > 0),
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		amount INTEGER NOT NULL,
+		created_at TIMESTAMP NOT NULL
 	)`,
 
 	// Payouts from Swiggy/Zomato/Swiggy-Dineout
 	`CREATE TABLE IF NOT EXISTS payouts (
-		id INTEGER PRIMARY KEY DEFAULT nextval('payouts_id_seq'),
+		id INTEGER NOT NULL,
 		outlet_name TEXT NOT NULL,
 		platform TEXT NOT NULL,
 		period_start DATE,
@@ -153,90 +141,65 @@ var migrations = []string{
 		marketing_ads_amt INTEGER NOT NULL DEFAULT 0,
 		final_payout_amt INTEGER NOT NULL DEFAULT 0,
 		utr_number TEXT,
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		created_at TIMESTAMP NOT NULL
 	)`,
-
-	// Indexes for common queries
-	`CREATE INDEX IF NOT EXISTS idx_bills_contact ON bills(contact_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_bills_status ON bills(status)`,
-	`CREATE INDEX IF NOT EXISTS idx_invoices_contact ON invoices(contact_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)`,
-	`CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)`,
-	`CREATE INDEX IF NOT EXISTS idx_transaction_documents_txn ON transaction_documents(transaction_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_transaction_documents_doc ON transaction_documents(document_type, document_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_payouts_platform ON payouts(platform)`,
-	`CREATE INDEX IF NOT EXISTS idx_payouts_outlet ON payouts(outlet_name)`,
 
 	// Recurring payments: scheduled income or expense
 	`CREATE TABLE IF NOT EXISTS recurring_payments (
-		id INTEGER PRIMARY KEY DEFAULT nextval('recurring_payments_id_seq'),
+		id INTEGER NOT NULL,
 		name TEXT NOT NULL,
-		type TEXT NOT NULL CHECK(type IN ('income', 'expense')),
-		amount INTEGER NOT NULL CHECK(amount > 0),
+		type TEXT NOT NULL,
+		amount INTEGER NOT NULL,
 		account_id INTEGER NOT NULL,
 		contact_id INTEGER,
-		frequency TEXT NOT NULL CHECK(frequency IN ('daily', 'weekly', 'monthly', 'quarterly', 'yearly')),
-		interval INTEGER NOT NULL DEFAULT 1 CHECK(interval > 0),
+		frequency TEXT NOT NULL,
+		interval INTEGER NOT NULL DEFAULT 1,
 		start_date DATE NOT NULL,
 		end_date DATE,
 		next_due_date DATE,
 		last_generated_date DATE,
-		status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'paused', 'cancelled', 'completed')),
+		status TEXT NOT NULL DEFAULT 'active',
 		description TEXT,
 		reference TEXT,
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
 	)`,
-	`CREATE INDEX IF NOT EXISTS idx_recurring_payments_account ON recurring_payments(account_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_recurring_payments_status ON recurring_payments(status)`,
-	`CREATE INDEX IF NOT EXISTS idx_recurring_payments_next_due ON recurring_payments(next_due_date)`,
 
 	// Recurring payment occurrences: one row per scheduled occurrence of a recurring payment.
 	// Auto-generated by the server on startup and via a daily background job.
 	`CREATE TABLE IF NOT EXISTS recurring_payment_occurrences (
-		id INTEGER PRIMARY KEY DEFAULT nextval('recurring_payment_occurrences_id_seq'),
+		id INTEGER NOT NULL,
 		recurring_payment_id INTEGER NOT NULL,
 		due_date DATE NOT NULL,
-		amount INTEGER NOT NULL CHECK(amount > 0),
+		amount INTEGER NOT NULL,
 		status TEXT NOT NULL DEFAULT 'pending',
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
 	)`,
-	`CREATE UNIQUE INDEX IF NOT EXISTS idx_recurring_payment_occurrences_unique ON recurring_payment_occurrences(recurring_payment_id, due_date)`,
-	`CREATE INDEX IF NOT EXISTS idx_recurring_payment_occurrences_rp ON recurring_payment_occurrences(recurring_payment_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_recurring_payment_occurrences_status ON recurring_payment_occurrences(status)`,
-	`CREATE INDEX IF NOT EXISTS idx_recurring_payment_occurrences_due_date ON recurring_payment_occurrences(due_date)`,
 
 	// Bill items: individual line items for a bill
 	`CREATE TABLE IF NOT EXISTS bill_items (
-		id INTEGER PRIMARY KEY DEFAULT nextval('bill_items_id_seq'),
+		id INTEGER NOT NULL,
 		bill_id INTEGER NOT NULL,
 		description TEXT NOT NULL,
 		quantity DOUBLE NOT NULL DEFAULT 1,
 		unit TEXT,
 		unit_price INTEGER NOT NULL DEFAULT 0,
 		amount INTEGER NOT NULL DEFAULT 0,
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
 	)`,
-	`CREATE INDEX IF NOT EXISTS idx_bill_items_bill ON bill_items(bill_id)`,
 
 	// Invoice items: individual line items for an invoice
 	`CREATE TABLE IF NOT EXISTS invoice_items (
-		id INTEGER PRIMARY KEY DEFAULT nextval('invoice_items_id_seq'),
+		id INTEGER NOT NULL,
 		invoice_id INTEGER NOT NULL,
 		description TEXT NOT NULL,
 		quantity DOUBLE NOT NULL DEFAULT 1,
 		unit TEXT,
 		unit_price INTEGER NOT NULL DEFAULT 0,
 		amount INTEGER NOT NULL DEFAULT 0,
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
 	)`,
-	`CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items(invoice_id)`,
-
-	// Add unit column to existing bill_items and invoice_items tables (idempotent).
-	`ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS unit TEXT`,
-	`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS unit TEXT`,
 }
