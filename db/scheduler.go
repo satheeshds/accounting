@@ -26,19 +26,33 @@ type serviceAccount struct {
 // tenant's database via the nexus gateway using rotated service-account credentials, and
 // calls MigrateAndGenerateTenant for each one.
 //
-// This function is intended to be called on startup (gap recovery) and on the daily schedule
-// by the platform service. It is also safe to call in any context that needs to process all
-// tenants in a single pass.
+// This function is intended to be called once on startup (gap recovery) by the platform
+// service. After startup, GenerateOccurrencesForAllTenants is used for the daily schedule.
 func MigrateAndGenerateAllTenants(controlURL, adminKey string) error {
+	return forEachTenant(controlURL, adminKey, "migrating and generating occurrences", MigrateAndGenerateTenant)
+}
+
+// GenerateOccurrencesForAllTenants lists every tenant from nexus-control, connects to each
+// tenant's database, and runs one-shot occurrence generation for each one. It does not
+// re-run migrations. Intended for the daily scheduled run by the platform service.
+func GenerateOccurrencesForAllTenants(controlURL, adminKey string) error {
+	return forEachTenant(controlURL, adminKey, "generating occurrences", func(portalDB *PortalDB, tenantID string) error {
+		return GenerateRecurringOccurrences(portalDB)
+	})
+}
+
+// forEachTenant lists all tenants, rotates credentials, opens a DB connection for each,
+// and calls fn(db, tenantID). Errors from fn are logged but do not abort the loop.
+func forEachTenant(controlURL, adminKey, action string, fn func(*PortalDB, string) error) error {
 	tenants, err := listAllTenants(controlURL, adminKey)
 	if err != nil {
 		return fmt.Errorf("failed to list tenants: %w", err)
 	}
 
-	slog.Info("processing migration and occurrence generation for tenants", "count", len(tenants))
+	slog.Info("processing tenants", "action", action, "count", len(tenants))
 
 	for _, t := range tenants {
-		slog.Info("migrating and generating occurrences for tenant", "tenant_id", t.ID, "tenant_name", t.Name)
+		slog.Info(action+" for tenant", "tenant_id", t.ID, "tenant_name", t.Name)
 
 		creds, err := RotateTenantServiceAccount(controlURL, adminKey, t.ID)
 		if err != nil {
@@ -52,8 +66,8 @@ func MigrateAndGenerateAllTenants(controlURL, adminKey string) error {
 			continue
 		}
 
-		if err := MigrateAndGenerateTenant(portalDB, t.ID); err != nil {
-			slog.Error("failed to migrate and generate occurrences", "tenant_id", t.ID, "error", err)
+		if err := fn(portalDB, t.ID); err != nil {
+			slog.Error("failed to "+action, "tenant_id", t.ID, "error", err)
 		}
 		portalDB.Close()
 	}

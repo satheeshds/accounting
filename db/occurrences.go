@@ -6,21 +6,6 @@ import (
 	"time"
 )
 
-func RunAndScheduleRecurringOccurrences(database *PortalDB) error {
-	if err := GenerateRecurringOccurrences(database); err != nil {
-		slog.Warn("daily occurrence generation failed", "error", err)
-	}
-
-	for {
-		now := time.Now()
-		next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
-		time.Sleep(time.Until(next))
-		if err := GenerateRecurringOccurrences(database); err != nil {
-			slog.Warn("daily occurrence generation failed", "error", err)
-		}
-	}
-}
-
 // GenerateRecurringOccurrences creates pending recurring_payment_occurrences for all active recurring
 // payments whose next_due_date is on or before today. It is idempotent — each (recurring_payment_id,
 // due_date) pair has a UNIQUE constraint, so re-running on an already-generated date is a no-op.

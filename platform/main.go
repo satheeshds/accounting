@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/satheeshds/portal/db"
@@ -17,25 +18,39 @@ func main() {
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})))
 
-	// Migrate and generate occurrences for all tenants immediately on startup (gap recovery),
-	// then repeat daily at midnight.
-	if err := runForAllTenants(); err != nil {
+	controlURL, adminKey, err := platformConfig()
+	if err != nil {
+		slog.Error("platform configuration error", "error", err)
+		os.Exit(1)
+	}
+
+	// Migrate and generate occurrences once at startup (gap recovery).
+	if err := db.MigrateAndGenerateAllTenants(controlURL, adminKey); err != nil {
 		slog.Warn("migration and occurrence generation failed on startup", "error", err)
 	}
 
+	// Daily loop: re-run only occurrence generation (migrations already applied above).
+	for {
+		now := time.Now()
+		next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+		slog.Info("next occurrence generation scheduled", "at", next.Format(time.RFC3339))
+		time.Sleep(time.Until(next))
+
+		if err := db.GenerateOccurrencesForAllTenants(controlURL, adminKey); err != nil {
+			slog.Warn("daily occurrence generation failed", "error", err)
+		}
+	}
 }
 
-// runForAllTenants reads configuration from env vars and calls
-// db.MigrateAndGenerateAllTenants, which handles tenant discovery, credential
-// rotation, DB connection, and per-tenant migration + occurrence generation.
-func runForAllTenants() error {
-	controlURL := os.Getenv("NEXUS_CONTROL_URL")
+// platformConfig reads and validates the environment variables required by the platform service.
+func platformConfig() (controlURL, adminKey string, err error) {
+	controlURL = os.Getenv("NEXUS_CONTROL_URL")
 	if controlURL == "" {
 		controlURL = "http://nexus-control:8080"
 	}
-	adminKey := os.Getenv("ADMIN_API_KEY")
+	adminKey = os.Getenv("ADMIN_API_KEY")
 	if adminKey == "" {
-		return fmt.Errorf("ADMIN_API_KEY is required")
+		return "", "", fmt.Errorf("ADMIN_API_KEY is required")
 	}
-	return db.MigrateAndGenerateAllTenants(controlURL, adminKey)
+	return controlURL, adminKey, nil
 }

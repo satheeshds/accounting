@@ -37,8 +37,8 @@ func MigrateAndGenerateTenant(tenantDB *PortalDB, tenantID string) error {
 		return fmt.Errorf("migration failed for tenant %s: %w", tenantID, err)
 	}
 
-	// Step 2: Generate occurrences
-	if err := RunAndScheduleRecurringOccurrences(tenantDB); err != nil {
+	// Step 2: Generate any pending recurring payment occurrences (one-shot).
+	if err := GenerateRecurringOccurrences(tenantDB); err != nil {
 		return fmt.Errorf("occurrence generation failed for tenant %s: %w", tenantID, err)
 	}
 
