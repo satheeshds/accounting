@@ -6,14 +6,14 @@ import (
 	"time"
 )
 
-// GenerateOccurrences creates pending recurring_payment_occurrences for all active recurring
-// payments whose next_due_date is on or before today. It is idempotent — each (recurring_payment_id,
-// due_date) pair has a UNIQUE constraint, so re-running on an already-generated date is a no-op.
+// GenerateRecurringOccurrences creates pending recurring_payment_occurrences for all active recurring
+// payments whose next_due_date is on or before today. It is idempotent — a WHERE NOT EXISTS guard
+// ensures a (recurring_payment_id, due_date) pair is only inserted once, compatible with DuckLake.
 //
 // Gap recovery: if the server was offline for months the loop runs until next_due_date > today,
 // creating one row per missed period. All missed occurrences appear as "pending" and can be matched
 // to the corresponding bank transactions in statement history.
-func GenerateOccurrences(database *PortalDB) error {
+func GenerateRecurringOccurrences(database *PortalDB) error {
 	today := time.Now().Format("2006-01-02")
 	slog.Info("generating recurring payment occurrences", "up_to", today)
 
@@ -57,16 +57,22 @@ func GenerateOccurrences(database *PortalDB) error {
 
 		completed := false
 		for !nextDue.After(todayTime) {
-			// Insert occurrence — ON CONFLICT DO NOTHING makes this idempotent
+			dueDate := nextDue.Format("2006-01-02")
+			// DuckLake does not support ON CONFLICT; use WHERE NOT EXISTS for idempotent insert.
+			// The recurring_payment_id and due_date params are bound twice (once for SELECT,
+			// once for the EXISTS subquery) — this is required by positional SQL placeholders.
 			if _, err := database.Exec(`
 				INSERT INTO recurring_payment_occurrences (recurring_payment_id, due_date, amount, status)
-				VALUES (?, ?, ?, 'pending')
-				ON CONFLICT DO NOTHING
-			`, rp.id, nextDue.Format("2006-01-02"), rp.amount); err != nil {
+				SELECT ?, ?, ?, 'pending'
+				WHERE NOT EXISTS (
+					SELECT 1 FROM recurring_payment_occurrences
+					WHERE recurring_payment_id = ? AND due_date = ?
+				)
+			`, rp.id, dueDate, rp.amount, rp.id, dueDate); err != nil {
 				slog.Error("failed to insert occurrence", "recurring_payment_id", rp.id,
-					"due_date", nextDue.Format("2006-01-02"), "error", err)
+					"due_date", dueDate, "error", err)
 				return fmt.Errorf("insert recurring_payment_occurrence (recurring_payment_id=%d, due_date=%s): %w",
-					rp.id, nextDue.Format("2006-01-02"), err)
+					rp.id, dueDate, err)
 			}
 
 			nextDue = AdvanceDate(nextDue, rp.frequency, rp.interval)
