@@ -73,8 +73,9 @@ func TestRegister_Success(t *testing.T) {
 	nexus := stubNexusServer(t, "", false, true)
 	defer nexus.Close()
 
-	t.Setenv("NEXUS_CONTROL_URL", nexus.URL)
-	t.Setenv("ADMIN_API_KEY", "test-admin-key")
+	old := Cfg
+	Cfg = Config{NexusControlURL: nexus.URL, AdminAPIKey: "test-admin-key"}
+	defer func() { Cfg = old }()
 
 	rec := postRegister(t, "/api/auth/register", map[string]string{
 		"org_name": "Acme Corp",
@@ -130,8 +131,9 @@ func TestRegister_NexusConflict(t *testing.T) {
 	nexus := stubNexusServer(t, "", true, false)
 	defer nexus.Close()
 
-	t.Setenv("NEXUS_CONTROL_URL", nexus.URL)
-	t.Setenv("ADMIN_API_KEY", "test-admin-key")
+	old := Cfg
+	Cfg = Config{NexusControlURL: nexus.URL, AdminAPIKey: "test-admin-key"}
+	defer func() { Cfg = old }()
 
 	rec := postRegister(t, "/api/auth/register", map[string]string{
 		"org_name": "Acme Corp",
@@ -148,8 +150,9 @@ func TestRegister_NexusError(t *testing.T) {
 	nexus := stubNexusServer(t, "provisioning failed", false, false)
 	defer nexus.Close()
 
-	t.Setenv("NEXUS_CONTROL_URL", nexus.URL)
-	t.Setenv("ADMIN_API_KEY", "test-admin-key")
+	old := Cfg
+	Cfg = Config{NexusControlURL: nexus.URL, AdminAPIKey: "test-admin-key"}
+	defer func() { Cfg = old }()
 
 	rec := postRegister(t, "/api/auth/register", map[string]string{
 		"org_name": "Acme Corp",
@@ -169,8 +172,9 @@ func TestRegister_RotationFailure(t *testing.T) {
 	nexus := stubNexusServer(t, "", false, false)
 	defer nexus.Close()
 
-	t.Setenv("NEXUS_CONTROL_URL", nexus.URL)
-	t.Setenv("ADMIN_API_KEY", "test-admin-key")
+	old := Cfg
+	Cfg = Config{NexusControlURL: nexus.URL, AdminAPIKey: "test-admin-key"}
+	defer func() { Cfg = old }()
 
 	rec := postRegister(t, "/api/auth/register", map[string]string{
 		"org_name": "Acme Corp",
