@@ -32,7 +32,7 @@ func main() {
 	// Daily loop: re-run only occurrence generation (migrations already applied above).
 	for {
 		now := time.Now()
-		next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+		next := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
 		slog.Info("next occurrence generation scheduled", "at", next.Format(time.RFC3339))
 		time.Sleep(time.Until(next))
 
