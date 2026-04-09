@@ -99,7 +99,7 @@ return nil
 // files and the raw *sql.DB (bypassing the lake. schema prefix rewrite used
 // by PortalDB for application queries).
 func newProvider(db *PortalDB) (*goose.Provider, error) {
-migFS, err := fs.Sub(embedMigrations, "db/migrations")
+migFS, err := fs.Sub(embedMigrations, "migrations")
 if err != nil {
 return nil, fmt.Errorf("failed to create migration filesystem: %w", err)
 }
