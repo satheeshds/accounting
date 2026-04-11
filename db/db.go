@@ -5,10 +5,20 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
+
+// pqConnValue returns s as a safely quoted lib/pq keyword/value connection-string value.
+// Values are wrapped in single quotes and single quotes within the value are doubled
+// (PostgreSQL libpq escaping convention), and backslashes are escaped with a backslash.
+func pqConnValue(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `'`, `''`)
+	return "'" + s + "'"
+}
 
 // OpenWithCredentials opens a single-connection PortalDB using the given
 // tenant_id as the PostgreSQL username and the JWT token as the password.
@@ -34,8 +44,8 @@ func OpenWithCredentials(tenantID, token string) (*PortalDB, error) {
 	if schema == "" {
 		schema = database
 	}
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s search_path=%s sslmode=disable",
-		host, port, tenantID, token, database, schema)
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		host, port, tenantID, token, database)
 	sqlDB, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open per-request database connection: %w", err)
@@ -60,6 +70,15 @@ func OpenWithCredentials(tenantID, token string) (*PortalDB, error) {
 	if pingErr != nil {
 		sqlDB.Close()
 		return nil, fmt.Errorf("failed to connect to tenant database: %w", pingErr)
+	}
+
+	// Set search_path explicitly via SQL so that unqualified table references
+	// resolve to the correct schema regardless of how the Nexus gateway handles
+	// startup connection parameters. pq.QuoteIdentifier safely escapes the
+	// schema name to prevent SQL injection.
+	if _, err := sqlDB.Exec("SET search_path TO " + pq.QuoteIdentifier(schema)); err != nil {
+		sqlDB.Close()
+		return nil, fmt.Errorf("failed to set search_path to %q: %w", schema, err)
 	}
 
 	return WrapDB(sqlDB), nil
@@ -94,8 +113,10 @@ func Open() (*PortalDB, error) {
 		if schema == "" {
 			schema = database
 		}
+		// search_path is set via a quoted DSN value so that schema names
+		// containing spaces or special characters are handled correctly.
 		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s search_path=%s sslmode=disable",
-			host, port, user, password, database, schema)
+			host, port, user, password, database, pqConnValue(schema))
 	}
 
 	sqlDB, err := sql.Open("postgres", dsn)
@@ -110,3 +131,4 @@ func Open() (*PortalDB, error) {
 	slog.Info("connected to nexus gateway")
 	return WrapDB(sqlDB), nil
 }
+
