@@ -5,27 +5,16 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
-
-	"github.com/lib/pq"
 )
-
-// pqConnValue returns s as a safely quoted lib/pq keyword/value connection-string value.
-// Values are wrapped in single quotes and single quotes within the value are doubled
-// (PostgreSQL libpq escaping convention), and backslashes are escaped with a backslash.
-func pqConnValue(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `'`, `''`)
-	return "'" + s + "'"
-}
 
 // OpenWithCredentials opens a single-connection PortalDB using the given
 // tenant_id as the PostgreSQL username and the JWT token as the password.
 // or service account credentials (username, password)
 // It reads NEXUS_HOST (default "localhost"), NEXUS_PORT (default "5433"),
-// NEXUS_DATABASE (default "lake"), and NEXUS_SCHEMA (default: same as NEXUS_DATABASE)
-// from the environment.
+// and NEXUS_DATABASE (default "lake") from the environment.
 // The connection is not pinged; the first query will surface any auth errors.
+// The Nexus gateway automatically sets the search_path for the connecting
+// tenant, so no explicit SET search_path is needed here.
 func OpenWithCredentials(tenantID, token string) (*PortalDB, error) {
 	host := os.Getenv("NEXUS_HOST")
 	if host == "" {
@@ -39,10 +28,6 @@ func OpenWithCredentials(tenantID, token string) (*PortalDB, error) {
 	if database == "" {
 		database = "lake"
 	}
-	schema := os.Getenv("NEXUS_SCHEMA")
-	if schema == "" {
-		schema = database
-	}
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		host, port, tenantID, token, database)
 	sqlDB, err := sql.Open("postgres", dsn)
@@ -50,28 +35,14 @@ func OpenWithCredentials(tenantID, token string) (*PortalDB, error) {
 		return nil, fmt.Errorf("failed to open per-request database connection: %w", err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-
-	// Best-effort: set search_path via SQL so that any unqualified table
-	// references resolve to the correct schema. This is belt-and-suspenders —
-	// PortalDB.rebind() already prepends the schema to every table name, so
-	// queries continue to work even if the Nexus gateway does not propagate
-	// SET commands. pq.QuoteIdentifier safely escapes the schema name.
-	// NOTE: The Nexus gateway does not support the lib/pq Ping (empty query
-	// protocol message), so we do not call Ping here; the first real query
-	// will surface any auth errors instead.
-	if _, err := sqlDB.Exec("SET search_path TO " + pq.QuoteIdentifier(schema)); err != nil {
-		slog.Warn("could not set search_path; queries will rely on schema-qualified table names",
-			"schema", schema, "error", err)
-	}
-
 	return WrapDB(sqlDB), nil
 }
 
 // Open creates and returns a PortalDB connection to the Nexus gateway.
 // The connection DSN is read from the DATABASE_URL environment variable.
 // If DATABASE_URL is not set, individual NEXUS_HOST, NEXUS_PORT, NEXUS_USER,
-// NEXUS_PASSWORD, NEXUS_DATABASE, and NEXUS_SCHEMA variables are used, defaulting
-// to a local Nexus instance on port 5433. NEXUS_SCHEMA defaults to NEXUS_DATABASE.
+// NEXUS_PASSWORD, and NEXUS_DATABASE variables are used, defaulting to a
+// local Nexus instance on port 5433.
 func Open() (*PortalDB, error) {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -92,14 +63,8 @@ func Open() (*PortalDB, error) {
 		if database == "" {
 			database = "lake"
 		}
-		schema := os.Getenv("NEXUS_SCHEMA")
-		if schema == "" {
-			schema = database
-		}
-		// search_path is set via a quoted DSN value so that schema names
-		// containing spaces or special characters are handled correctly.
-		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s search_path=%s sslmode=disable",
-			host, port, user, password, database, pqConnValue(schema))
+		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+			host, port, user, password, database)
 	}
 
 	sqlDB, err := sql.Open("postgres", dsn)
