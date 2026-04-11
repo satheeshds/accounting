@@ -38,7 +38,7 @@ func (t *Timestamp) parse(s string) error {
 		return nil
 	}
 
-	// Try standard the common formats we expect from DuckDB/Postgres.
+	// Try the common standard formats we expect from DuckDB/Postgres.
 	formats := []string{
 		time.RFC3339,
 		time.RFC3339Nano,
