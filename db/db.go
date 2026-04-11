@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/lib/pq"
 )
@@ -52,31 +51,14 @@ func OpenWithCredentials(tenantID, token string) (*PortalDB, error) {
 	}
 	sqlDB.SetMaxOpenConns(1)
 
-	// Verify the connection is usable before returning.  Without an upfront
-	// Ping the first user (goose provider init) would receive a confusing
-	// "bad connection / connection is already closed" if the Nexus gateway
-	// dropped the TCP connection right after service-account rotation.
-	// Retry a few times to tolerate brief propagation delays.
-	var pingErr error
-	for i := range 3 {
-		if pingErr = sqlDB.Ping(); pingErr == nil {
-			break
-		}
-		if i < 2 {
-			slog.Warn("database ping failed, retrying", "attempt", i+1, "error", pingErr)
-			time.Sleep(time.Duration(i+1) * 2 * time.Second)
-		}
-	}
-	if pingErr != nil {
-		sqlDB.Close()
-		return nil, fmt.Errorf("failed to connect to tenant database: %w", pingErr)
-	}
-
 	// Best-effort: set search_path via SQL so that any unqualified table
 	// references resolve to the correct schema. This is belt-and-suspenders —
 	// PortalDB.rebind() already prepends the schema to every table name, so
 	// queries continue to work even if the Nexus gateway does not propagate
 	// SET commands. pq.QuoteIdentifier safely escapes the schema name.
+	// NOTE: The Nexus gateway does not support the lib/pq Ping (empty query
+	// protocol message), so we do not call Ping here; the first real query
+	// will surface any auth errors instead.
 	if _, err := sqlDB.Exec("SET search_path TO " + pq.QuoteIdentifier(schema)); err != nil {
 		slog.Warn("could not set search_path; queries will rely on schema-qualified table names",
 			"schema", schema, "error", err)
