@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -40,6 +41,27 @@ func OpenWithCredentials(tenantID, token string) (*PortalDB, error) {
 		return nil, fmt.Errorf("failed to open per-request database connection: %w", err)
 	}
 	sqlDB.SetMaxOpenConns(1)
+
+	// Verify the connection is usable before returning.  Without an upfront
+	// Ping the first user (goose provider init) would receive a confusing
+	// "bad connection / connection is already closed" if the Nexus gateway
+	// dropped the TCP connection right after service-account rotation.
+	// Retry a few times to tolerate brief propagation delays.
+	var pingErr error
+	for i := range 3 {
+		if pingErr = sqlDB.Ping(); pingErr == nil {
+			break
+		}
+		if i < 2 {
+			slog.Warn("database ping failed, retrying", "attempt", i+1, "error", pingErr)
+			time.Sleep(time.Duration(i+1) * 2 * time.Second)
+		}
+	}
+	if pingErr != nil {
+		sqlDB.Close()
+		return nil, fmt.Errorf("failed to connect to tenant database: %w", pingErr)
+	}
+
 	return WrapDB(sqlDB), nil
 }
 
