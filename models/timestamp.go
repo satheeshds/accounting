@@ -12,6 +12,19 @@ type Timestamp struct {
 	time.Time
 }
 
+// timestampFormats lists the timestamp string layouts accepted by Timestamp.parse,
+// ordered from most to least specific. Defined at package level to avoid
+// repeated allocations when scanning many rows.
+var timestampFormats = []string{
+	time.RFC3339Nano,
+	time.RFC3339,
+	"2006-01-02 15:04:05.999999-07",
+	"2006-01-02 15:04:05.999999",
+	"2006-01-02 15:04:05.999999 +0000 UTC",
+	"2006-01-02 15:04:05",
+	"2006-01-02",
+}
+
 // Scan implements the sql.Scanner interface.
 func (t *Timestamp) Scan(value interface{}) error {
 	if value == nil {
@@ -39,17 +52,7 @@ func (t *Timestamp) parse(s string) error {
 	}
 
 	// Try the common standard formats we expect from DuckDB/Postgres.
-	formats := []string{
-		time.RFC3339,
-		time.RFC3339Nano,
-		"2006-01-02 15:04:05.999999-07",
-		"2006-01-02 15:04:05.999999",
-		"2006-01-02 15:04:05.999999 +0000 UTC",
-		"2006-01-02 15:04:05",
-		"2006-01-02",
-	}
-
-	for _, f := range formats {
+	for _, f := range timestampFormats {
 		parsed, err := time.Parse(f, s)
 		if err == nil {
 			t.Time = parsed
