@@ -13,7 +13,8 @@ import (
 // tenant_id as the PostgreSQL username and the JWT token as the password.
 // or service account credentials (username, password)
 // It reads NEXUS_HOST (default "localhost"), NEXUS_PORT (default "5433"),
-// and NEXUS_DATABASE (default "lake") from the environment.
+// NEXUS_DATABASE (default "lake"), and NEXUS_SCHEMA (default: same as NEXUS_DATABASE)
+// from the environment.
 // The connection is not pinged; the first query will surface any auth errors.
 func OpenWithCredentials(tenantID, token string) (*PortalDB, error) {
 	host := os.Getenv("NEXUS_HOST")
@@ -28,8 +29,12 @@ func OpenWithCredentials(tenantID, token string) (*PortalDB, error) {
 	if database == "" {
 		database = "lake"
 	}
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		host, port, tenantID, token, database)
+	schema := os.Getenv("NEXUS_SCHEMA")
+	if schema == "" {
+		schema = database
+	}
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s search_path=%s sslmode=disable",
+		host, port, tenantID, token, database, schema)
 	sqlDB, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open per-request database connection: %w", err)
@@ -41,8 +46,8 @@ func OpenWithCredentials(tenantID, token string) (*PortalDB, error) {
 // Open creates and returns a PortalDB connection to the Nexus gateway.
 // The connection DSN is read from the DATABASE_URL environment variable.
 // If DATABASE_URL is not set, individual NEXUS_HOST, NEXUS_PORT, NEXUS_USER,
-// NEXUS_PASSWORD, and NEXUS_DATABASE variables are used, defaulting to a
-// local Nexus instance on port 5433.
+// NEXUS_PASSWORD, NEXUS_DATABASE, and NEXUS_SCHEMA variables are used, defaulting
+// to a local Nexus instance on port 5433. NEXUS_SCHEMA defaults to NEXUS_DATABASE.
 func Open() (*PortalDB, error) {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -63,8 +68,12 @@ func Open() (*PortalDB, error) {
 		if database == "" {
 			database = "lake"
 		}
-		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-			host, port, user, password, database)
+		schema := os.Getenv("NEXUS_SCHEMA")
+		if schema == "" {
+			schema = database
+		}
+		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s search_path=%s sslmode=disable",
+			host, port, user, password, database, schema)
 	}
 
 	sqlDB, err := sql.Open("postgres", dsn)
