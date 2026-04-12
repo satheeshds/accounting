@@ -19,7 +19,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BasicAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Get a list of all bank accounts, cash, and credit cards with current balances.",
@@ -65,7 +65,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BasicAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Create a new bank account, cash or credit card.",
@@ -134,7 +134,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BasicAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Get details and current balance of a specific account.",
@@ -196,7 +196,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BasicAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Update details of an existing account.",
@@ -288,7 +288,7 @@ const docTemplate = `{
             "delete": {
                 "security": [
                     {
-                        "BasicAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Remove an account.",
@@ -346,6 +346,122 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/login": {
+            "post": {
+                "description": "Authenticates with the Nexus gateway using email and password. Returns a JWT token.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Login",
+                "parameters": [
+                    {
+                        "description": "Login credentials",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.loginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.Response"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/register": {
+            "post": {
+                "description": "Provisions a tenant via the Nexus gateway and initialises the portal schema. Requires NEXUS_CONTROL_URL and ADMIN_API_KEY to be configured.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Register a new tenant",
+                "parameters": [
+                    {
+                        "description": "Registration data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.registerRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.Response"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.Response"
                         }
                     }
                 }
@@ -3941,7 +4057,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "created_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 },
                 "description": {
                     "type": "string"
@@ -3977,7 +4093,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "created_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 },
                 "description": {
                     "type": "string"
@@ -4056,7 +4172,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "created_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 },
                 "description": {
                     "type": "string"
@@ -4092,7 +4208,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "created_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 },
                 "description": {
                     "type": "string"
@@ -4218,6 +4334,31 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.loginRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.registerRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "org_name": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
         "models.Account": {
             "type": "object",
             "properties": {
@@ -4226,7 +4367,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "created_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 },
                 "id": {
                     "type": "integer"
@@ -4242,7 +4383,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 }
             }
         },
@@ -4281,7 +4422,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "created_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 },
                 "due_date": {
                     "type": "string"
@@ -4312,7 +4453,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "updated_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 }
             }
         },
@@ -4361,7 +4502,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "created_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 },
                 "description": {
                     "type": "string"
@@ -4379,7 +4520,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "updated_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 }
             }
         },
@@ -4415,7 +4556,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "created_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 },
                 "email": {
                     "type": "string"
@@ -4438,7 +4579,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 }
             }
         },
@@ -4476,7 +4617,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "created_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 },
                 "due_date": {
                     "type": "string"
@@ -4509,7 +4650,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "updated_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 }
             }
         },
@@ -4555,7 +4696,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "created_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 },
                 "description": {
                     "type": "string"
@@ -4576,7 +4717,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "updated_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 }
             }
         },
@@ -4608,7 +4749,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "created_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 },
                 "final_payout_amt": {
                     "type": "integer"
@@ -4722,7 +4863,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "created_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 },
                 "description": {
                     "type": "string"
@@ -4765,7 +4906,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 }
             }
         },
@@ -4827,7 +4968,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "created_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 },
                 "due_date": {
                     "type": "string"
@@ -4849,6 +4990,14 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "updated_at": {
+                    "$ref": "#/definitions/models.Timestamp"
+                }
+            }
+        },
+        "models.Timestamp": {
+            "type": "object",
+            "properties": {
+                "time.Time": {
                     "type": "string"
                 }
             }
@@ -4876,7 +5025,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "created_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 },
                 "description": {
                     "type": "string"
@@ -4904,7 +5053,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "updated_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 }
             }
         },
@@ -4915,7 +5064,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "created_at": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Timestamp"
                 },
                 "document_id": {
                     "type": "integer"
@@ -4977,8 +5126,10 @@ const docTemplate = `{
         }
     },
     "securityDefinitions": {
-        "BasicAuth": {
-            "type": "basic"
+        "BearerAuth": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }`
@@ -4986,7 +5137,7 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0.0",
-	Host:             "localhost:8080",
+	Host:             "localhost:8090",
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
 	Title:            "Portal API",

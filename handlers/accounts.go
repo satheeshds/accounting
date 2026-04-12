@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -35,7 +36,7 @@ func getAccountByID(d *db.PortalDB, id int) (models.Account, error) {
 // @Param        search  query     string  false  "Search by name"
 // @Success      200  {object}  Response{data=[]models.Account}
 // @Router       /accounts [get]
-// @Security     BasicAuth
+// @Security     BearerAuth
 func ListAccounts(w http.ResponseWriter, r *http.Request) {
 	d := getDB(r)
 	search := r.URL.Query().Get("search")
@@ -54,12 +55,17 @@ func ListAccounts(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	var accounts []models.Account
+	slog.Debug("Accounts", "query result count", rows)
+	rowCount := 0
 	for rows.Next() {
+		slog.Debug("Accounts", "next row", rowCount)
+		rowCount++
 		var a models.Account
 		if err := rows.Scan(&a.ID, &a.Name, &a.Type, &a.OpeningBalance, &a.CreatedAt, &a.UpdatedAt, &a.Balance); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		slog.Debug("Accounts", "scanned account", a)
 		accounts = append(accounts, a)
 	}
 	if accounts == nil {
@@ -77,7 +83,7 @@ func ListAccounts(w http.ResponseWriter, r *http.Request) {
 // @Success      200  {object}  Response{data=models.Account}
 // @Failure      404  {object}  Response{error=string}
 // @Router       /accounts/{id} [get]
-// @Security     BasicAuth
+// @Security     BearerAuth
 func GetAccount(w http.ResponseWriter, r *http.Request) {
 	d := getDB(r)
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
@@ -101,7 +107,7 @@ func GetAccount(w http.ResponseWriter, r *http.Request) {
 // @Success      201      {object}  Response{data=models.Account}
 // @Failure      400      {object}  Response{error=string}
 // @Router       /accounts [post]
-// @Security     BasicAuth
+// @Security     BearerAuth
 func CreateAccount(w http.ResponseWriter, r *http.Request) {
 	d := getDB(r)
 	var input models.AccountInput
@@ -142,7 +148,7 @@ func CreateAccount(w http.ResponseWriter, r *http.Request) {
 // @Failure      400      {object}  Response{error=string}
 // @Failure      404      {object}  Response{error=string}
 // @Router       /accounts/{id} [put]
-// @Security     BasicAuth
+// @Security     BearerAuth
 func UpdateAccount(w http.ResponseWriter, r *http.Request) {
 	d := getDB(r)
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
@@ -184,7 +190,7 @@ func UpdateAccount(w http.ResponseWriter, r *http.Request) {
 // @Success      200  {object}  Response{data=map[string]string}
 // @Failure      404  {object}  Response{error=string}
 // @Router       /accounts/{id} [delete]
-// @Security     BasicAuth
+// @Security     BearerAuth
 func DeleteAccount(w http.ResponseWriter, r *http.Request) {
 	d := getDB(r)
 	id, _ := strconv.Atoi(chi.URLParam(r, "id"))
