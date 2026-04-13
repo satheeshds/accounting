@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -15,21 +16,30 @@ import (
 // type-mismatch errors on PostgreSQL-compatible gateways that do not fully
 // implement the extended query protocol.
 //
-// standard_conforming_strings=on is sent as a startup parameter so that the
-// gateway reports it back in its ParameterStatus messages. This satisfies
-// pgx's safety check that requires the setting before executing simple
-// protocol queries.
+// The AfterConnect hook explicitly sets standard_conforming_strings and
+// client_encoding via the low-level pgconn layer (bypassing pgx's own
+// safety check). This causes the server to send back ParameterStatus messages
+// that pgconn stores, satisfying pgx's check before any application query runs.
+// This handles gateways that do not advertise these settings in their startup
+// ParameterStatus messages.
 func openDB(dsn string) (*sql.DB, error) {
 	config, err := pgx.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse DSN: %w", err)
 	}
 	config.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
-	if config.RuntimeParams == nil {
-		config.RuntimeParams = make(map[string]string)
+
+	afterConnect := func(ctx context.Context, conn *pgx.Conn) error {
+		// Use the pgconn layer directly so the SET commands are sent via the
+		// simple query protocol without triggering pgx's own
+		// standard_conforming_strings guard (which hasn't been satisfied yet).
+		// The server's ParameterStatus responses update pgconn's internal map,
+		// allowing subsequent pgx simple-protocol queries to pass the check.
+		_, err := conn.PgConn().Exec(ctx, "SET standard_conforming_strings=on; SET client_encoding='UTF8'").ReadAll()
+		return err
 	}
-	config.RuntimeParams["standard_conforming_strings"] = "on"
-	return stdlib.OpenDB(*config), nil
+
+	return stdlib.OpenDB(*config, stdlib.OptionAfterConnect(afterConnect)), nil
 }
 
 // OpenWithCredentials opens a single-connection PortalDB using the given
