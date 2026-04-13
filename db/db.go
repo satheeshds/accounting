@@ -13,8 +13,6 @@ import (
 // It reads NEXUS_HOST (default "localhost"), NEXUS_PORT (default "5433"),
 // and NEXUS_DATABASE (default "lake") from the environment.
 // The connection is not pinged; the first query will surface any auth errors.
-// The Nexus gateway automatically sets the search_path for the connecting
-// tenant, so no explicit SET search_path is needed here.
 func OpenWithCredentials(tenantID, token string) (*PortalDB, error) {
 	host := os.Getenv("NEXUS_HOST")
 	if host == "" {
