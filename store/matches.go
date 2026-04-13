@@ -101,6 +101,9 @@ type RPMatchInfo struct {
 
 // SuggestBills returns unallocated bill candidates for match scoring.
 func (s *Store) SuggestBills(amount models.Money, txnDate time.Time, txnSearchText string) ([]BillMatchCandidate, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
 	rows, err := s.db.Query(`
 		SELECT b.id, COALESCE(b.bill_number, ''), b.due_date, b.issue_date,
 			b.amount, COALESCE(b.notes, ''), COALESCE(c.name, ''),
@@ -134,6 +137,9 @@ func (s *Store) SuggestBills(amount models.Money, txnDate time.Time, txnSearchTe
 
 // SuggestInvoices returns unallocated invoice candidates for match scoring.
 func (s *Store) SuggestInvoices(amount models.Money, txnDate time.Time, txnSearchText string) ([]InvoiceMatchCandidate, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
 	rows, err := s.db.Query(`
 		SELECT i.id, COALESCE(i.invoice_number, ''), i.due_date, i.issue_date,
 			i.amount, COALESCE(i.notes, ''), COALESCE(c.name, ''),
@@ -167,6 +173,9 @@ func (s *Store) SuggestInvoices(amount models.Money, txnDate time.Time, txnSearc
 
 // SuggestPayouts returns unallocated payout candidates for match scoring.
 func (s *Store) SuggestPayouts(amount models.Money, txnDate time.Time, txnSearchText string) ([]PayoutMatchCandidate, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
 	rows, err := s.db.Query(`
 		SELECT p.id, COALESCE(p.utr_number, ''), p.settlement_date,
 			p.final_payout_amt, COALESCE(p.outlet_name, ''),
@@ -198,6 +207,9 @@ func (s *Store) SuggestPayouts(amount models.Money, txnDate time.Time, txnSearch
 
 // SuggestRecurringPaymentOccurrences returns pending occurrence candidates for match scoring.
 func (s *Store) SuggestRecurringPaymentOccurrences(txnType string, amount models.Money, txnDate time.Time) ([]RPOccurrenceCandidate, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
 	rows, err := s.db.Query(`
 		SELECT o.id, o.due_date, o.amount,
 			COALESCE(SUM(td.amount), 0) AS allocated,
