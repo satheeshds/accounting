@@ -157,6 +157,11 @@ func newTestProvider(db *PortalDB) (*goose.Provider, error) {
 // It creates the 'lake' schema in the DuckDB database and sets it as the default
 // search path so that table references using the 'lake.' prefix (added by
 // PortalDB.rebind) are resolved correctly.
+//
+// After applying migrations it installs DuckDB sequences on every application
+// table's id column so that INSERT statements without an explicit id value work
+// in tests. In production, id generation is handled by the Nexus gateway with
+// custom logic, so the migration files themselves are left unmodified.
 func MigrateTestDB(db *PortalDB) error {
 	// Create the lake schema and set it as the default so that application tables
 	// are created there and match the lake. prefix that PortalDB.rebind adds.
@@ -173,6 +178,44 @@ func MigrateTestDB(db *PortalDB) error {
 	}
 	if _, err := provider.Up(context.Background()); err != nil {
 		return fmt.Errorf("database migration failed: %w", err)
+	}
+
+	// Add sequences for test auto-increment on all application tables.
+	// Production ID generation is handled by Nexus; these sequences are only
+	// needed so that handler tests can insert rows without supplying explicit ids.
+	type tableSetup struct {
+		name       string
+		timestamps []string // columns that need DEFAULT CURRENT_TIMESTAMP
+	}
+	tables := []tableSetup{
+		{"accounts", []string{"created_at", "updated_at"}},
+		{"contacts", []string{"created_at", "updated_at"}},
+		{"bills", []string{"created_at", "updated_at"}},
+		{"invoices", []string{"created_at", "updated_at"}},
+		{"transactions", []string{"created_at", "updated_at"}},
+		{"transaction_documents", []string{"created_at"}},
+		{"payouts", []string{"created_at"}},
+		{"recurring_payments", []string{"created_at", "updated_at"}},
+		{"recurring_payment_occurrences", []string{"created_at", "updated_at"}},
+		{"bill_items", []string{"created_at", "updated_at"}},
+		{"invoice_items", []string{"created_at", "updated_at"}},
+	}
+	for _, tbl := range tables {
+		seqName := tbl.name + "_id_seq"
+		createSeq := fmt.Sprintf("CREATE SEQUENCE IF NOT EXISTS %s START 1", seqName)
+		if _, err := db.DB.Exec(createSeq); err != nil {
+			return fmt.Errorf("failed to create sequence %s: %w", seqName, err)
+		}
+		alterID := fmt.Sprintf("ALTER TABLE %s ALTER COLUMN id SET DEFAULT nextval('%s')", tbl.name, seqName)
+		if _, err := db.DB.Exec(alterID); err != nil {
+			return fmt.Errorf("failed to set id default for %s: %w", tbl.name, err)
+		}
+		for _, col := range tbl.timestamps {
+			alterTS := fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET DEFAULT CURRENT_TIMESTAMP", tbl.name, col)
+			if _, err := db.DB.Exec(alterTS); err != nil {
+				return fmt.Errorf("failed to set %s default for %s: %w", col, tbl.name, err)
+			}
+		}
 	}
 	return nil
 }
