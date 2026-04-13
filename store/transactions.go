@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/satheeshds/portal/models"
@@ -118,7 +119,9 @@ func (s *Store) CreateTransaction(input models.TransactionInput) (models.Transac
 
 		if input.Reference == nil {
 			autoRef := fmt.Sprintf("TRF-%d", id1)
-			tx.Exec("UPDATE transactions SET reference = ? WHERE reference = ?", autoRef, *ref)
+			if _, err := tx.Exec("UPDATE transactions SET reference = ? WHERE reference = ?", autoRef, *ref); err != nil {
+				return models.Transaction{}, err
+			}
 		}
 
 		if err := tx.Commit(); err != nil {
@@ -249,8 +252,11 @@ func (s *Store) CreateTransactionLink(txnID int, input models.TransactionDocumen
 	}
 
 	var td models.TransactionDocument
-	s.db.QueryRow("SELECT id, transaction_id, document_type, document_id, amount, created_at FROM transaction_documents WHERE id = ?", id).
+	err = s.db.QueryRow("SELECT id, transaction_id, document_type, document_id, amount, created_at FROM transaction_documents WHERE id = ?", id).
 		Scan(&td.ID, &td.TransactionID, &td.DocumentType, &td.DocumentID, &td.Amount, &td.CreatedAt)
+	if err != nil {
+		return models.TransactionDocument{}, err
+	}
 	return td, nil
 }
 
@@ -259,7 +265,9 @@ func (s *Store) CreateTransactionLink(txnID int, input models.TransactionDocumen
 func (s *Store) DeleteTransactionLink(txnID, linkID int) error {
 	var docType string
 	var docID int
-	s.db.QueryRow("SELECT document_type, document_id FROM transaction_documents WHERE id = ?", linkID).Scan(&docType, &docID)
+	if err := s.db.QueryRow("SELECT document_type, document_id FROM transaction_documents WHERE id = ?", linkID).Scan(&docType, &docID); err != nil && err != sql.ErrNoRows {
+		return err
+	}
 
 	res, err := s.db.Exec("DELETE FROM transaction_documents WHERE id = ? AND transaction_id = ?", linkID, txnID)
 	if err != nil {
@@ -324,5 +332,7 @@ func (s *Store) UpdateDocumentStatus(docType string, docID int) {
 		}
 	}
 
-	s.db.Exec(fmt.Sprintf("UPDATE %s SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", table), newStatus, docID)
+	if _, err := s.db.Exec(fmt.Sprintf("UPDATE %s SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", table), newStatus, docID); err != nil {
+		slog.Warn("UpdateDocumentStatus: failed to update status", "docType", docType, "docID", docID, "error", err)
+	}
 }

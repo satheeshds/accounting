@@ -48,7 +48,9 @@ func (s *Store) GetDashboard() (DashboardData, error) {
 			var id int
 			var tp, desc, date, acct *string
 			var amount int
-			rows.Scan(&id, &tp, &amount, &date, &desc, &acct)
+			if scanErr := rows.Scan(&id, &tp, &amount, &date, &desc, &acct); scanErr != nil {
+				continue
+			}
 			d.RecentTransactions = append(d.RecentTransactions, map[string]any{
 				"id":               id,
 				"type":             tp,

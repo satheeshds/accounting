@@ -12,26 +12,6 @@ import (
 	"github.com/satheeshds/portal/store"
 )
 
-const contactSelectQuery = `SELECT id, name, type, email, phone, created_at, updated_at,
-	CASE 
-		WHEN type = 'vendor' THEN COALESCE((SELECT SUM(amount) FROM bills WHERE contact_id = contacts.id), 0)
-		WHEN type = 'customer' THEN COALESCE((SELECT SUM(amount) FROM invoices WHERE contact_id = contacts.id), 0)
-		ELSE 0
-	END as total_amount,
-	CASE 
-		WHEN type = 'vendor' THEN COALESCE((SELECT SUM(td.amount) FROM transaction_documents td JOIN bills b ON td.document_id = b.id WHERE td.document_type = 'bill' AND b.contact_id = contacts.id), 0)
-		WHEN type = 'customer' THEN COALESCE((SELECT SUM(td.amount) FROM transaction_documents td JOIN invoices i ON td.document_id = i.id WHERE td.document_type = 'invoice' AND i.contact_id = contacts.id), 0)
-		ELSE 0
-	END as allocated_amount
-	FROM contacts`
-
-func scanContact(scanner interface{ Scan(...any) error }) (models.Contact, error) {
-	var c models.Contact
-	err := scanner.Scan(&c.ID, &c.Name, &c.Type, &c.Email, &c.Phone, &c.CreatedAt, &c.UpdatedAt, &c.TotalAmount, &c.AllocatedAmount)
-	c.Balance = c.TotalAmount - c.AllocatedAmount
-	return c, err
-}
-
 // ListContacts lists all contacts
 // @Summary      List contacts
 // @Description  Get a list of all vendors and customers with financial summaries.
