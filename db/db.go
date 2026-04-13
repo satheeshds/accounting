@@ -14,12 +14,21 @@ import (
 // (text encoding), and returns a *sql.DB. Simple protocol avoids binary
 // type-mismatch errors on PostgreSQL-compatible gateways that do not fully
 // implement the extended query protocol.
+//
+// standard_conforming_strings=on is sent as a startup parameter so that the
+// gateway reports it back in its ParameterStatus messages. This satisfies
+// pgx's safety check that requires the setting before executing simple
+// protocol queries.
 func openDB(dsn string) (*sql.DB, error) {
 	config, err := pgx.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse DSN: %w", err)
 	}
 	config.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	if config.RuntimeParams == nil {
+		config.RuntimeParams = make(map[string]string)
+	}
+	config.RuntimeParams["standard_conforming_strings"] = "on"
 	return stdlib.OpenDB(*config), nil
 }
 
