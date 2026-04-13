@@ -23,7 +23,7 @@ var staticFiles embed.FS
 // @title           Portal API
 // @version         1.0.0
 // @description     API for managing accounts, contacts, bills, invoices, and transactions.
-// @host            localhost:8080
+// @host            localhost:8090
 // @BasePath        /api/v1
 // @securityDefinitions.apikey  BearerAuth
 // @in                          header

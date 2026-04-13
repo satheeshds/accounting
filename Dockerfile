@@ -1,5 +1,5 @@
 # Build Stage
-FROM golang:1.24-bookworm AS builder
+FROM golang:1.26-bookworm AS builder
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY main.go ./
 COPY handlers/ ./handlers/
 COPY models/ ./models/
-RUN swag init -g main.go --dir .
+RUN swag init -g main.go --dir . --output ./docs
 
 # Copy remaining source (static, etc)
 COPY . .
