@@ -5,7 +5,23 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 )
+
+// openDB parses the DSN, configures pgx to use the simple query protocol
+// (text encoding), and returns a *sql.DB. Simple protocol avoids binary
+// type-mismatch errors on PostgreSQL-compatible gateways that do not fully
+// implement the extended query protocol.
+func openDB(dsn string) (*sql.DB, error) {
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse DSN: %w", err)
+	}
+	config.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	return stdlib.OpenDB(*config), nil
+}
 
 // OpenWithCredentials opens a single-connection PortalDB using the given
 // tenant_id as the PostgreSQL username and the JWT token as the password.
@@ -28,7 +44,7 @@ func OpenWithCredentials(tenantID, token string) (*PortalDB, error) {
 	}
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		host, port, tenantID, token, database)
-	sqlDB, err := sql.Open("pgx", dsn)
+	sqlDB, err := openDB(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open per-request database connection: %w", err)
 	}
@@ -65,7 +81,7 @@ func Open() (*PortalDB, error) {
 			host, port, user, password, database)
 	}
 
-	sqlDB, err := sql.Open("pgx", dsn)
+	sqlDB, err := openDB(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
