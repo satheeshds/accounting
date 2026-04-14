@@ -25,9 +25,17 @@ import (
 // @Security     BasicAuth
 func ListRecurringPayments(w http.ResponseWriter, r *http.Request) {
 	s := store.New(getDB(r))
+	accountID := r.URL.Query().Get("account_id")
+	if accountID != "" {
+		if _, err := strconv.Atoi(accountID); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid account_id")
+			return
+		}
+	}
+
 	payments, err := s.ListRecurringPayments(
 		r.URL.Query().Get("status"),
-		r.URL.Query().Get("account_id"),
+		accountID,
 		r.URL.Query().Get("type"),
 	)
 	if err != nil {
