@@ -24,9 +24,10 @@ func stubNexusServer(t *testing.T, nexusErr string, nexusConflict bool, withRota
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		// Assert that connection reuse is disabled for this request.
-		if !r.Close {
-			t.Error("expected r.Close to be true for registration request")
+		// Assert that connection reuse is disabled for this request when using HTTP/1.x.
+		// Under HTTP/2, r.Close is not a reliable signal for this behavior.
+		if r.ProtoMajor == 1 && !strings.EqualFold(r.Header.Get("Connection"), "close") {
+			t.Error(`expected Connection header to be "close" for registration request over HTTP/1.x`)
 		}
 		if nexusConflict {
 			w.Header().Set("Content-Type", "application/json")
