@@ -131,23 +131,22 @@ func createGooseVersionTable(db *PortalDB) error {
 		id INTEGER,
 		version_id BIGINT NOT NULL,
 		is_applied BOOLEAN NOT NULL,
-		tstamp TIMESTAMP
+		tstamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);`
 	if _, err := db.DB.Exec(createSQL); err != nil {
 		return fmt.Errorf("failed to create goose_db_version table: %w", err)
 	}
 
-	// Seed the zero-version baseline row if it does not already exist.
-	// Goose normally inserts this row during its own table creation; since we
-	// created the table above, goose skips that step and we must seed it here.
-	var count int
-	if err := db.QueryRow("SELECT COUNT(1) FROM goose_db_version WHERE version_id = 0").Scan(&count); err != nil {
-		return fmt.Errorf("failed to check goose zero version: %w", err)
-	}
-	if count == 0 {
-		if _, err := db.Exec("INSERT INTO goose_db_version (version_id, is_applied) VALUES (0, true)"); err != nil {
-			return fmt.Errorf("failed to seed goose zero version: %w", err)
-		}
+	// Seed the zero-version baseline row atomically so concurrent callers
+	// cannot both observe an empty table and insert duplicate rows.
+	if _, err := db.DB.Exec(`
+		INSERT INTO goose_db_version (version_id, is_applied, tstamp)
+		SELECT 0, true, CURRENT_TIMESTAMP
+		WHERE NOT EXISTS (
+			SELECT 1 FROM goose_db_version WHERE version_id = 0
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to seed goose zero version: %w", err)
 	}
 
 	return nil
