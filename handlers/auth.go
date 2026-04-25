@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +17,22 @@ import (
 // nexusClient is a shared HTTP client. Timeouts are managed at the request level via context
 // to allow different limits for registration (5 min) and login (30 sec).
 var nexusClient = &http.Client{}
+
+// nexusRegisterClient is a dedicated HTTP client for the long-running Nexus registration
+// request. Its transport disables keep-alives (preventing connection-pool reuse for HTTP/1.x)
+// and HTTP/2 (via a non-nil empty TLSNextProto map), so EOF errors from intermediate proxies
+// dropping idle connections are avoided consistently across both protocols.
+var nexusRegisterClient = &http.Client{
+	Transport: &http.Transport{
+		DisableKeepAlives: true,
+		// Setting TLSNextProto to a non-nil empty map is the documented Go mechanism
+		// for disabling HTTP/2 (see net/http Transport.TLSNextProto docs: "if not nil,
+		// HTTP/2 support is not enabled automatically"). ForceAttemptHTTP2=false is the
+		// default and only affects transports that use custom dial functions; it does not
+		// disable HTTP/2 on a standard transport.
+		TLSNextProto: make(map[string]func(string, *tls.Conn) http.RoundTripper),
+	},
+}
 
 // Register provisions a new tenant via nexus-control and then initialises the
 // portal schema and occurrence generation for that tenant.
@@ -75,7 +92,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := nexusClient.Do(httpReq)
+	resp, err := nexusRegisterClient.Do(httpReq)
 	if err != nil {
 		slog.Error("nexus register request failed", "error", err)
 		writeError(w, http.StatusBadGateway, "nexus gateway unavailable")
