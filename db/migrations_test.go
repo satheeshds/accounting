@@ -40,6 +40,11 @@ func openTestDB(t *testing.T) *PortalDB {
 		t.Fatalf("open test database: %v", err)
 	}
 	t.Cleanup(func() { rawDB.Close() })
+	// Create the lake schema so that migration SQL using the explicit "lake."
+	// qualifier works correctly in the DuckDB test environment.
+	if _, err := rawDB.Exec("CREATE SCHEMA IF NOT EXISTS lake"); err != nil {
+		t.Fatalf("create lake schema: %v", err)
+	}
 	return WrapDB(rawDB)
 }
 

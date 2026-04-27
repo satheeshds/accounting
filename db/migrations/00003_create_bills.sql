@@ -1,6 +1,7 @@
 -- +goose Up
-CREATE TABLE IF NOT EXISTS bills (
-    id INTEGER NOT NULL,
+CREATE SEQUENCE IF NOT EXISTS lake.bills_id_seq;
+CREATE TABLE IF NOT EXISTS lake.bills (
+    id INTEGER NOT NULL DEFAULT nextval('lake.bills_id_seq'),
     contact_id INTEGER,
     bill_number TEXT,
     issue_date DATE,
@@ -9,9 +10,10 @@ CREATE TABLE IF NOT EXISTS bills (
     status TEXT NOT NULL DEFAULT 'draft',
     file_url TEXT,
     notes TEXT,
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- +goose Down
-DROP TABLE IF EXISTS bills;
+DROP TABLE IF EXISTS lake.bills;
+DROP SEQUENCE IF EXISTS lake.bills_id_seq;

@@ -1,6 +1,7 @@
 -- +goose Up
-CREATE TABLE IF NOT EXISTS recurring_payments (
-    id INTEGER NOT NULL,
+CREATE SEQUENCE IF NOT EXISTS lake.recurring_payments_id_seq;
+CREATE TABLE IF NOT EXISTS lake.recurring_payments (
+    id INTEGER NOT NULL DEFAULT nextval('lake.recurring_payments_id_seq'),
     name TEXT NOT NULL,
     type TEXT NOT NULL,
     amount INTEGER NOT NULL,
@@ -15,9 +16,10 @@ CREATE TABLE IF NOT EXISTS recurring_payments (
     status TEXT NOT NULL DEFAULT 'active',
     description TEXT,
     reference TEXT,
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- +goose Down
-DROP TABLE IF EXISTS recurring_payments;
+DROP TABLE IF EXISTS lake.recurring_payments;
+DROP SEQUENCE IF EXISTS lake.recurring_payments_id_seq;

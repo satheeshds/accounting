@@ -1,6 +1,7 @@
 -- +goose Up
-CREATE TABLE IF NOT EXISTS invoices (
-    id INTEGER NOT NULL,
+CREATE SEQUENCE IF NOT EXISTS lake.invoices_id_seq;
+CREATE TABLE IF NOT EXISTS lake.invoices (
+    id INTEGER NOT NULL DEFAULT nextval('lake.invoices_id_seq'),
     contact_id INTEGER,
     invoice_number TEXT,
     issue_date DATE,
@@ -9,9 +10,10 @@ CREATE TABLE IF NOT EXISTS invoices (
     status TEXT NOT NULL DEFAULT 'draft',
     file_url TEXT,
     notes TEXT,
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- +goose Down
-DROP TABLE IF EXISTS invoices;
+DROP TABLE IF EXISTS lake.invoices;
+DROP SEQUENCE IF EXISTS lake.invoices_id_seq;

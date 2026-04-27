@@ -126,7 +126,18 @@ func newProvider(db *PortalDB) (*goose.Provider, error) {
 // GENERATED, but will auto-increment a plain INTEGER id column.  Because goose
 // uses CREATE TABLE IF NOT EXISTS, it will skip creation when the table already
 // exists, so this must be called first.
+//
+// It also ensures the "lake" schema exists so that migration SQL using the
+// explicit "lake." qualifier (required for DuckDB test environments where the
+// default schema is not "lake") succeeds regardless of the database backend.
 func createGooseVersionTable(db *PortalDB) error {
+	// Create the lake schema if it does not yet exist.  On the Nexus gateway
+	// the schema is pre-created by the platform; the IF NOT EXISTS guard makes
+	// this call safe and idempotent on both backends.
+	if _, err := db.DB.Exec("CREATE SCHEMA IF NOT EXISTS lake"); err != nil {
+		return fmt.Errorf("failed to create lake schema: %w", err)
+	}
+
 	const createSQL = `CREATE TABLE IF NOT EXISTS goose_db_version (
 		id INTEGER,
 		version_id BIGINT NOT NULL,
