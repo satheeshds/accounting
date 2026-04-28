@@ -345,7 +345,7 @@
                 }
             }
         },
-        "/api/auth/login": {
+        "/auth/login": {
             "post": {
                 "description": "Authenticates with the Nexus gateway using email and password. Returns a JWT token.",
                 "consumes": [
@@ -400,7 +400,7 @@
                 }
             }
         },
-        "/api/auth/register": {
+        "/auth/register": {
             "post": {
                 "description": "Provisions a tenant via the Nexus gateway and initialises the portal schema. Requires NEXUS_CONTROL_URL and ADMIN_API_KEY to be configured.",
                 "consumes": [
@@ -5114,13 +5114,6 @@
                     "type": "integer"
                 }
             }
-        }
-    },
-    "securityDefinitions": {
-        "BearerAuth": {
-            "type": "apiKey",
-            "name": "Authorization",
-            "in": "header"
         }
     }
 }

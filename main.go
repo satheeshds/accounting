@@ -20,14 +20,16 @@ import (
 //go:embed static/*
 var staticFiles embed.FS
 
-// @title           Portal API
-// @version         1.0.0
-// @description     API for managing accounts, contacts, bills, invoices, and transactions.
-// @host            localhost:8090
-// @BasePath        /api/v1
-// @securityDefinitions.apikey  BearerAuth
-// @in                          header
-// @name                        Authorization
+//	@title							Portal API
+//	@version						1.0.0
+//	@description					API for managing accounts, contacts, bills, invoices, and transactions.
+//	@host							localhost:8090
+//	@BasePath						/api/v1
+//	@securityDefinitions.BearerAuth	BearerAuth
+//	@in								header
+//	@type							http
+//	@scheme							bearer
+//	@name							Authorization
 
 func main() {
 	// Configure structured logging
@@ -47,8 +49,8 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 	// Public auth routes (proxy to Nexus gateway)
-	r.Post("/api/auth/register", handlers.Register)
-	r.Post("/api/auth/login", handlers.Login)
+	r.Post("/api/v1/auth/register", handlers.Register)
+	r.Post("/api/v1/auth/login", handlers.Login)
 
 	// API routes with bearer token / basic auth
 	r.Route("/api/v1", func(r chi.Router) {

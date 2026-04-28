@@ -921,7 +921,7 @@ paths:
       summary: Update account
       tags:
       - accounts
-  /api/auth/login:
+  /auth/login:
     post:
       consumes:
       - application/json
@@ -958,7 +958,7 @@ paths:
       summary: Login
       tags:
       - auth
-  /api/auth/register:
+  /auth/register:
     post:
       consumes:
       - application/json
@@ -3015,9 +3015,4 @@ paths:
       summary: Suggest document matches for a transaction
       tags:
       - transactions
-securityDefinitions:
-  BearerAuth:
-    in: header
-    name: Authorization
-    type: apiKey
 swagger: "2.0"
