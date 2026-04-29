@@ -108,7 +108,7 @@ func TestBearerAuth_JWT_ValidToken_NoNexusHost(t *testing.T) {
 
 // TestBearerAuth_JWT_RawToken verifies that a raw JWT (without "Bearer " prefix)
 // is accepted — this is what Swagger UI sends when using an apiKey security scheme.
-func TestBearerAuth_JWT_RawToken_NoNexusHost(t *testing.T) {
+func TestBearerAuth_JWT_RawToken(t *testing.T) {
 	withTestConfig(t, Config{NexusControlURL: "http://nexus.example.com"})
 	h := BearerAuth(okHandler)
 
