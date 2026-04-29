@@ -21,7 +21,7 @@ import (
 //	@Param			search		query		string	false	"Search by bill number, notes, or vendor name"
 //	@Success		200			{object}	Response{data=[]models.Bill}
 //	@Router			/bills [get]
-//	@Security		BasicAuth
+//	@Security		BearerAuth
 func ListBills(w http.ResponseWriter, r *http.Request) {
 	s := store.New(getDB(r))
 	bills, err := s.ListBills(
