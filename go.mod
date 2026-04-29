@@ -47,6 +47,8 @@ require (
 	github.com/sethvargo/go-retry v0.3.0 // indirect
 	github.com/sv-tools/openapi v0.4.0 // indirect
 	github.com/swaggo/files v0.0.0-20220610200504-28940afbdbfe // indirect
+	github.com/swaggo/files/v2 v2.0.0 // indirect
+	github.com/swaggo/http-swagger/v2 v2.0.2 // indirect
 	github.com/swaggo/swag v1.8.1 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
