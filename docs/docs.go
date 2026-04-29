@@ -472,7 +472,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BasicAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Get a list of all payable bills, with current status and allocation info.",

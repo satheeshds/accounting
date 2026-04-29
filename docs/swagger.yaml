@@ -1027,7 +1027,7 @@ paths:
                   type: array
               type: object
       security:
-      - BasicAuth: []
+      - BearerAuth: []
       summary: List bills
       tags:
       - bills
