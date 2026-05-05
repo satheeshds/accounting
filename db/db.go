@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -35,11 +34,7 @@ func openDB(dsn string) (*sql.DB, error) {
 	// 00:00:00") are accepted in addition to the strict YYYY-MM-DD format that
 	// the default pgtype.DateCodec requires.
 	afterConnect := stdlib.OptionAfterConnect(func(_ context.Context, conn *pgx.Conn) error {
-		conn.TypeMap().RegisterType(&pgtype.Type{
-			Name:  "date",
-			OID:   pgtype.DateOID,
-			Codec: lenientDateCodec{},
-		})
+		registerLenientDateCodec(conn.TypeMap())
 		return nil
 	})
 

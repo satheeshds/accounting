@@ -69,6 +69,18 @@ func (p lenientDateScanPlan) Scan(src []byte, dst any) error {
 	return scanner.ScanDate(pgtype.Date{Time: t, Valid: true})
 }
 
+// registerLenientDateCodec overrides the strict pgtype.DateCodec for DATE OID
+// on the given type map with lenientDateCodec.  It is called from
+// stdlib.OptionAfterConnect so every new pgx stdlib connection accepts the
+// timestamp-like date strings returned by the Nexus gateway.
+func registerLenientDateCodec(m *pgtype.Map) {
+	m.RegisterType(&pgtype.Type{
+		Name:  "date",
+		OID:   pgtype.DateOID,
+		Codec: lenientDateCodec{},
+	})
+}
+
 // decodeDateBytes converts raw database bytes to time.Time for a DATE column.
 // Binary format: 4-byte signed int32, days since 2000-01-01.
 // Text format:   tries YYYY-MM-DD first, then common timestamp layouts.
