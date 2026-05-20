@@ -232,13 +232,13 @@ definitions:
       created_at:
         $ref: '#/definitions/models.Timestamp'
       due_date:
-        type: string
+        $ref: '#/definitions/models.Date'
       file_url:
         type: string
       id:
         type: integer
       issue_date:
-        type: string
+        $ref: '#/definitions/models.Date'
       items:
         items:
           $ref: '#/definitions/models.BillItem'
@@ -348,6 +348,11 @@ definitions:
       type:
         type: string
     type: object
+  models.Date:
+    properties:
+      time.Time:
+        type: string
+    type: object
   models.Invoice:
     properties:
       allocated:
@@ -362,7 +367,7 @@ definitions:
       created_at:
         $ref: '#/definitions/models.Timestamp'
       due_date:
-        type: string
+        $ref: '#/definitions/models.Date'
       file_url:
         type: string
       id:
@@ -370,7 +375,7 @@ definitions:
       invoice_number:
         type: string
       issue_date:
-        type: string
+        $ref: '#/definitions/models.Date'
       items:
         items:
           $ref: '#/definitions/models.InvoiceItem'
@@ -459,9 +464,9 @@ definitions:
       outlet_name:
         type: string
       period_end:
-        type: string
+        $ref: '#/definitions/models.Date'
       period_start:
-        type: string
+        $ref: '#/definitions/models.Date'
       platform:
         description: swiggy, zomato, swiggy-dineout
         type: string
@@ -470,7 +475,7 @@ definitions:
       restaurant_discount_amt:
         type: integer
       settlement_date:
-        type: string
+        $ref: '#/definitions/models.Date'
       taxes_tcs_tds_amt:
         type: integer
       total_orders:
@@ -527,7 +532,7 @@ definitions:
       description:
         type: string
       end_date:
-        type: string
+        $ref: '#/definitions/models.Date'
       frequency:
         description: daily, weekly, monthly, quarterly, yearly
         type: string
@@ -537,15 +542,15 @@ definitions:
         description: every N frequencies (e.g. 2 = every 2 months)
         type: integer
       last_generated_date:
-        type: string
+        $ref: '#/definitions/models.Date'
       name:
         type: string
       next_due_date:
-        type: string
+        $ref: '#/definitions/models.Date'
       reference:
         type: string
       start_date:
-        type: string
+        $ref: '#/definitions/models.Date'
       status:
         description: active, paused, cancelled, completed
         type: string
@@ -596,7 +601,7 @@ definitions:
       created_at:
         $ref: '#/definitions/models.Timestamp'
       due_date:
-        type: string
+        $ref: '#/definitions/models.Date'
       id:
         type: integer
       payment_name:
@@ -640,7 +645,7 @@ definitions:
       reference:
         type: string
       transaction_date:
-        type: string
+        $ref: '#/definitions/models.Date'
       transfer_account_id:
         type: integer
       transfer_account_name:

@@ -11,7 +11,7 @@ type Payout struct {
 	Platform              string    `json:"platform"` // swiggy, zomato, swiggy-dineout
 	PeriodStart           Date      `json:"period_start"`
 	PeriodEnd             Date      `json:"period_end"`
-	SettlementDate        Date      `json:"settlement_date"`
+	SettlementDate        string    `json:"settlement_date"`
 	TotalOrders           int       `json:"total_orders"`
 	GrossSalesAmt         Money     `json:"gross_sales_amt"`
 	RestaurantDiscountAmt Money     `json:"restaurant_discount_amt"`
@@ -61,9 +61,6 @@ func (p *PayoutInput) Validate() string {
 	}
 	if err := NormalizeDate(p.PeriodEnd); err != nil {
 		return "period_end: " + err.Error()
-	}
-	if err := NormalizeDate(p.SettlementDate); err != nil {
-		return "settlement_date: " + err.Error()
 	}
 	return ""
 }

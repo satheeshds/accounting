@@ -4378,7 +4378,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/models.Timestamp"
                 },
                 "due_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "file_url": {
                     "type": "string"
@@ -4387,7 +4387,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "issue_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "items": {
                     "type": "array",
@@ -4553,6 +4553,14 @@ const docTemplate = `{
                 }
             }
         },
+        "models.Date": {
+            "type": "object",
+            "properties": {
+                "time.Time": {
+                    "type": "string"
+                }
+            }
+        },
         "models.Invoice": {
             "type": "object",
             "properties": {
@@ -4573,7 +4581,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/models.Timestamp"
                 },
                 "due_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "file_url": {
                     "type": "string"
@@ -4585,7 +4593,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "issue_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "items": {
                     "type": "array",
@@ -4720,10 +4728,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "period_end": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "period_start": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "platform": {
                     "description": "swiggy, zomato, swiggy-dineout",
@@ -4736,7 +4744,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "settlement_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "taxes_tcs_tds_amt": {
                     "type": "integer"
@@ -4822,7 +4830,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "end_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "frequency": {
                     "description": "daily, weekly, monthly, quarterly, yearly",
@@ -4836,19 +4844,19 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "last_generated_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "name": {
                     "type": "string"
                 },
                 "next_due_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "reference": {
                     "type": "string"
                 },
                 "start_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "status": {
                     "description": "active, paused, cancelled, completed",
@@ -4924,7 +4932,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/models.Timestamp"
                 },
                 "due_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "id": {
                     "type": "integer"
@@ -4990,7 +4998,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "transaction_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "transfer_account_id": {
                     "type": "integer"

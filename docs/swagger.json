@@ -4371,7 +4371,7 @@
                     "$ref": "#/definitions/models.Timestamp"
                 },
                 "due_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "file_url": {
                     "type": "string"
@@ -4380,7 +4380,7 @@
                     "type": "integer"
                 },
                 "issue_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "items": {
                     "type": "array",
@@ -4546,6 +4546,14 @@
                 }
             }
         },
+        "models.Date": {
+            "type": "object",
+            "properties": {
+                "time.Time": {
+                    "type": "string"
+                }
+            }
+        },
         "models.Invoice": {
             "type": "object",
             "properties": {
@@ -4566,7 +4574,7 @@
                     "$ref": "#/definitions/models.Timestamp"
                 },
                 "due_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "file_url": {
                     "type": "string"
@@ -4578,7 +4586,7 @@
                     "type": "string"
                 },
                 "issue_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "items": {
                     "type": "array",
@@ -4713,10 +4721,10 @@
                     "type": "string"
                 },
                 "period_end": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "period_start": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "platform": {
                     "description": "swiggy, zomato, swiggy-dineout",
@@ -4729,7 +4737,7 @@
                     "type": "integer"
                 },
                 "settlement_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "taxes_tcs_tds_amt": {
                     "type": "integer"
@@ -4815,7 +4823,7 @@
                     "type": "string"
                 },
                 "end_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "frequency": {
                     "description": "daily, weekly, monthly, quarterly, yearly",
@@ -4829,19 +4837,19 @@
                     "type": "integer"
                 },
                 "last_generated_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "name": {
                     "type": "string"
                 },
                 "next_due_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "reference": {
                     "type": "string"
                 },
                 "start_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "status": {
                     "description": "active, paused, cancelled, completed",
@@ -4917,7 +4925,7 @@
                     "$ref": "#/definitions/models.Timestamp"
                 },
                 "due_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "id": {
                     "type": "integer"
@@ -4983,7 +4991,7 @@
                     "type": "string"
                 },
                 "transaction_date": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.Date"
                 },
                 "transfer_account_id": {
                     "type": "integer"

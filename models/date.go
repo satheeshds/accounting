@@ -132,8 +132,13 @@ func NormalizeDate(s *string) error {
 	return fmt.Errorf("invalid date format %q, expected YYYY-MM-DD, DD-MM-YYYY, or DD/MM/YYYY", v)
 }
 
-// isYYYYMMDD checks whether v looks like YYYY-MM-DD (all digits except separators).
+// isYYYYMMDD checks whether v looks like YYYY-MM-DD or YYYY-MM-DD HH:mm:ss(all digits except separators).
 func isYYYYMMDD(v string, sep byte) bool {
+	parts := strings.Split(v, " ")
+	if len(parts) > 2 {
+		return false
+	}
+	v = parts[0]
 	if len(v) != 10 {
 		return false
 	}
